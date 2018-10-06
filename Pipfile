@@ -1,0 +1,18 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+requests = "*"
+flask = "*"
+google-api-python-client = "*"
+"oauth2client" = "*"
+flask-restful = "*"
+dropbox = "*"
+
+
+[dev-packages]
+
+[requires]
+python_version = "3.6"
