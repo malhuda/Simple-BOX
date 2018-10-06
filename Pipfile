@@ -10,7 +10,7 @@ google-api-python-client = "*"
 "oauth2client" = "*"
 flask-restful = "*"
 dropbox = "*"
-
+gunicorn = "*"
 
 [dev-packages]
 
