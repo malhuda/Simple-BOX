@@ -450,6 +450,13 @@ def upload_file():
     '''
 
 
+@app.route("/", methods=['GET'])
+def index():
+    return """
+    index
+    """
+
+
 @app.route('/logo.jpg')
 def logo():
     """Serves the logo image."""
