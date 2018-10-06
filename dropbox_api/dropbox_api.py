@@ -511,7 +511,7 @@ def cli():
     cli
     :return:
     """
-    app.run(host='0.0.0.0', port=8087, debug=True)
+    app.run(host='0.0.0.0', debug=True)
 
 
 cli()
