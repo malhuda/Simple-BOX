@@ -1,1 +1,1 @@
-gunicorn -w 7 dropbox_api:app
+web: gunicorn -w 7 dropbox_api:app
