@@ -107,6 +107,7 @@ def get_mime(file_suffix: str) -> str:
         "csv": "text/csv",
         "pdf": "application/pdf",
         "html": "text/html",
+        "txt": "text/txt",
         # ....
     }
     return mime_dict.get(file_suffix)
