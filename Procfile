@@ -1,1 +1,1 @@
-web: python all_in_one.py
+gunicorn -w 7 dropbox_api:app
