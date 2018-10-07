@@ -1,1 +1,1 @@
-web: unicorn -w 7 all_in_one:app
+web: gunicorn -w 7 all_in_one:app
