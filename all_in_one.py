@@ -19,7 +19,7 @@ logging.basicConfig(level=level, format=format, datefmt=datefmt)
 logger = logging.getLogger(__name__)
 logger.setLevel(level)
 
-from dropbox_api import drobox_cli
+from dropbox_api import drobox_cli, app
 
 if __name__ == '__main__':
-    drobox_cli()
+    app.run(host='0.0.0.0', debug=True)
