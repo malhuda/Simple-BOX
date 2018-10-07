@@ -1,1 +1,1 @@
-web python all_in_one.py
+web: unicorn -w 7 all_in_one:app
