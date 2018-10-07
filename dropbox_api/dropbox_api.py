@@ -365,13 +365,13 @@ class SimpleDBXServiceAPI(SimpleDropboxAPI):
                                               excepted_name=excepted_name)).to_dict()
 
     @response_wrapper
-    def simple_upload_via_url(self, external_url: str, remote_file_path: str = "/DEFAULT/") -> SimpleFileMetadata:
+    def simple_upload_via_url(self, external_url: str, remote_file_path: str = "/DEFAULT/") -> dict:
         """
         :param external_url:
         :param remote_file_path:
         :return:
         """
-        return sda.upload_from_external(external_url=external_url, remote_folder_path=remote_file_path)
+        return sda.upload_from_external(external_url=external_url, remote_folder_path=remote_file_path).to_dict()
 
     @response_wrapper
     def simple_download(self,
