@@ -1,1 +1,1 @@
-web: gunicorn -w 7 all_in_one:app
+web python all_in_one.py
