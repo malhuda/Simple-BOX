@@ -80,6 +80,7 @@ def separate_path_and_name(file_path: str):
     f_path = '/'
     for it in fps[0:-1]:
         f_path = os.path.join(f_path, it)
+    f_path = f_path + "/"
     return f_path, f_name
 
 
@@ -415,6 +416,11 @@ sda = SimpleDBXServiceAPI(access_token=ACCESS_TOKEN)
 
 @app.route("/api/dropbox/folder/list", methods=['GET', 'POST'])
 def list_folder():
+    """
+    sample as :
+    /api/dropbox/folder/list?rfn=default
+    :return:
+    """
     rfn = request.args.get("remote_folder_name") or request.args.get("rfn")
     if is_blank(rfn):
         return flask.jsonify(
@@ -429,7 +435,12 @@ def list_folder():
 
 @app.route("/api/dropbox/file/upload", methods=['GET', 'POST'])
 def upload_file_from_external_url():
-    eu = request.args.get("external_url") or request.args.get("ex")
+    """
+    sample as:
+    /api/dropbox/file/upload?eu=https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_272x92dp.png
+    :return:
+    """
+    eu = request.args.get("external_url") or request.args.get("eu")
     if is_blank(eu):
         return flask.jsonify({"response": "external url is blank in '/api/dropbox/file/upload'", "success": False})
     res = sda.simple_upload_via_url(external_url=eu)
@@ -443,6 +454,11 @@ def allowed_file(filename):
 
 @app.route('/view/dropbox/file/upload', methods=['GET', 'POST'])
 def upload_file():
+    """
+    sample as :
+    /view/dropbox/file/upload
+    :return:
+    """
     if request.method == 'POST':
         # check if the post request has the file part
         if 'file' not in request.files:
@@ -469,37 +485,74 @@ def upload_file():
 
 
 @app.route("/", methods=['GET'])
-def index(): return """ <h1>Welcome To Own Space. </h1>"""
+def index(): return """ <h1>Welcome To Helixcs's Space. </h1>"""
 
 
 @app.route('/showtime')
-def logo():
-    """Serves the logo image."""
+def showtime():
+    """
+    直接名称：/showtime?rfn=/DEFAULT/googlelogo_color_272x92dp.png
+    模糊查询名称：/showtime?rfn=google
+    模糊查询名称：/showtime?rfn=/DEFAULT/google
+    :return:
+    """
     rfn = request.args.get("remote_file_name") or request.args.get("rfn")
     if is_blank(rfn):
         return flask.jsonify({"response": "remote file name is blank in '/showtime'", "success": False})
 
     rf_path, rf_name = separate_path_and_name(rfn)
-    file_suffix = rfn.split(".")[-1] or rf_name.split(".")[-1]
-    file_mime = get_mime(file_suffix)
-    try:
-        md, res = sda.download_to_response(remote_file_path=rfn)
-        return flask.send_file(
-            io.BytesIO(res.content),
-            attachment_filename=rf_name,
-            mimetype=file_mime
-        )
+    if is_blank(rf_name):
+        return flask.jsonify({"response": "rf name is blank in '/showtime'", "success": False})
 
-    except Exception as ex:
-        rsl = sda.simple_list(remote_folder_path=rfn)
-        for item in rsl:
-            if str(item.get("name")).__contains__(rfn):
+    if is_blank(rf_path.replace("/", "")):
+        # 默认 default 目录
+        rf_path = "/DEFAULT/"
+        rsl = sda.simple_list(remote_folder_path=rf_path)
+        if not rsl.get("success"):
+            return flask.jsonify({"response": rsl.get("response"), "success": False})
+        for item in rsl.get("response"):
+            real_name = item.get("name")
+            if str(real_name).__contains__(rf_name):
+                file_suffix = real_name.split(".")[-1] or real_name.split(".")[-1]
+                file_mime = get_mime(file_suffix)
+
                 md, res = sda.download_to_response(remote_file_path=item.get("path"))
                 return flask.send_file(
                     io.BytesIO(res.content),
                     attachment_filename=rf_name,
                     mimetype=file_mime
                 )
+        # can not match with remote files
+        return flask.jsonify({"response": "rf name can not match with remote files in '/showtime'", "success": False})
+    else:
+        file_suffix = rfn.split(".")[-1] or rf_name.split(".")[-1]
+        file_mime = get_mime(file_suffix)
+        try:
+            md, res = sda.download_to_response(remote_file_path=rfn)
+            return flask.send_file(
+                io.BytesIO(res.content),
+                attachment_filename=rf_name,
+                mimetype=file_mime
+            )
+
+        except Exception as ex:
+            rsl = sda.simple_list(remote_folder_path=rf_path)
+            if not rsl.get("success"):
+                return flask.jsonify({"response": rsl.get("response"), "success": False})
+            for item in rsl.get("response"):
+                real_name = item.get("name")
+                if str(real_name).__contains__(rf_name):
+                    file_suffix = real_name.split(".")[-1] or real_name.split(".")[-1]
+                    file_mime = get_mime(file_suffix)
+                    md, res = sda.download_to_response(remote_file_path=item.get("path"))
+                    return flask.send_file(
+                        io.BytesIO(res.content),
+                        attachment_filename=rf_name,
+                        mimetype=file_mime
+                    )
+            # can not match with remote files
+            return flask.jsonify(
+                {"response": "rf name can not match with remote files in '/showtime'", "success": False})
 
 
 # upload demo
