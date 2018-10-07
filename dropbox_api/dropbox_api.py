@@ -19,7 +19,7 @@ from contextlib import contextmanager
 from flask import Flask, flash, request, redirect, url_for
 from werkzeug.utils import secure_filename
 from dropbox.files import FileMetadata, ListFolderResult
-from typing import List
+from typing import List, AnyStr
 
 level = logging.DEBUG
 format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -35,6 +35,9 @@ FILE_DOT = "."
 
 FILEMETADATA_LIST_TYPE = List[FileMetadata]
 FILEMETADATA_TYPE = FileMetadata
+BOOLEAN_TYPE = bool
+DICT_TYPE = dict
+STR_TYPE = str
 
 
 class DropboxAPIException(Exception):
@@ -144,6 +147,7 @@ class SimpleFileMetadata(object):
 
 
 class SimpleDropboxAPI(object):
+
     def __init__(self, access_token):
         self.access_token = access_token
         self.dbxa = None
@@ -285,7 +289,7 @@ class SimpleDropboxAPI(object):
             buffer.close()
         return SimpleFileMetadata(md)
 
-    def upload_from_bytes(self, file_bytes: bytes, remote_folder_path: str, excepted_name: str):
+    def upload_from_bytes(self, file_bytes: bytes, remote_folder_path: str, excepted_name: str) -> SimpleFileMetadata:
         """
         upload from bytes
         :param file_bytes:
@@ -390,6 +394,17 @@ class SimpleDBXServiceAPI(SimpleDropboxAPI):
                                                 excepted_name=excepted_name)).to_dict()
 
 
+def is_blank(pstr: str):
+    """
+    check string whether blank
+    :param pstr:
+    :return:
+    """
+    if pstr is None or pstr.strip('') == '':
+        return True
+    return False
+
+
 # restful API
 
 import flask
@@ -398,24 +413,27 @@ app = flask.Flask(__name__)
 sda = SimpleDBXServiceAPI(access_token=ACCESS_TOKEN)
 
 
-@app.route("/api/dropbox/list/<remote_folder_name>", methods=['GET', 'POST'])
-def list_folder(remote_folder_name: str):
-    if not remote_folder_name.startswith("/"):
-        remote_folder_name = "/" + remote_folder_name
-    if not remote_folder_name.endswith("/"):
-        remote_folder_name = remote_folder_name + "/"
-
-    res = sda.simple_list(remote_folder_path=remote_folder_name)
+@app.route("/api/dropbox/folder/list", methods=['GET', 'POST'])
+def list_folder():
+    rfn = request.args.get("remote_folder_name") or request.args.get("rfn")
+    if is_blank(rfn):
+        return flask.jsonify(
+            {"response": "remote folder name is blank in '/api/dropbox/folder/list'", "success": False})
+    if not rfn.startswith("/"):
+        rfn = "/" + rfn
+    if not rfn.endswith("/"):
+        rfn = rfn + "/"
+    res = sda.simple_list(remote_folder_path=rfn)
     return flask.jsonify(res)
 
 
 @app.route("/api/dropbox/file/upload", methods=['GET', 'POST'])
 def upload_file_from_external_url():
-    res = sda.simple_upload_via_url(external_url=request.args.get("external_url"))
+    eu = request.args.get("external_url") or request.args.get("ex")
+    if is_blank(eu):
+        return flask.jsonify({"response": "external url is blank in '/api/dropbox/file/upload'", "success": False})
+    res = sda.simple_upload_via_url(external_url=eu)
     return flask.jsonify(res)
-
-
-# ---------------- view -----------------
 
 
 def allowed_file(filename):
@@ -451,24 +469,21 @@ def upload_file():
 
 
 @app.route("/", methods=['GET'])
-def index():
-    return """
-    index
-    """
+def index(): return """ <h1>Welcome To Own Space. </h1>"""
 
 
-@app.route('/logo.jpg')
+@app.route('/showtime')
 def logo():
     """Serves the logo image."""
-    remote_file_name = request.args.get("remote_file_name") or request.args.get("rfn")
-    if not remote_file_name:
-        return None
+    rfn = request.args.get("remote_file_name") or request.args.get("rfn")
+    if is_blank(rfn):
+        return flask.jsonify({"response": "remote file name is blank in '/showtime'", "success": False})
 
-    rf_path, rf_name = separate_path_and_name(remote_file_name)
-    file_suffix = remote_file_name.split(".")[-1] or rf_name.split(".")[-1]
+    rf_path, rf_name = separate_path_and_name(rfn)
+    file_suffix = rfn.split(".")[-1] or rf_name.split(".")[-1]
     file_mime = get_mime(file_suffix)
     try:
-        md, res = sda.download_to_response(remote_file_path=remote_file_name)
+        md, res = sda.download_to_response(remote_file_path=rfn)
         return flask.send_file(
             io.BytesIO(res.content),
             attachment_filename=rf_name,
@@ -476,9 +491,9 @@ def logo():
         )
 
     except Exception as ex:
-        rsl = sda.simple_list(remote_folder_path=remote_file_name)
+        rsl = sda.simple_list(remote_folder_path=rfn)
         for item in rsl:
-            if str(item.get("name")).__contains__(remote_file_name):
+            if str(item.get("name")).__contains__(rfn):
                 md, res = sda.download_to_response(remote_file_path=item.get("path"))
                 return flask.send_file(
                     io.BytesIO(res.content),
