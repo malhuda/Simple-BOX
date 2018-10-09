@@ -374,12 +374,16 @@ class SimpleDBXServiceAPI(SimpleDropboxAPI):
                                               excepted_name=excepted_name)).to_dict()
 
     @response_wrapper
-    def simple_upload_via_url(self, external_url: str, remote_file_path: str = "/DEFAULT/") -> dict:
+    def simple_upload_via_url(self, external_url: str, remote_file_path: str = "/DEFAULT/", **kwargs) -> dict:
         """
         :param external_url:
         :param remote_file_path:
         :return:
         """
+        excepted_name = kwargs.get("excepted_name")
+        if not is_blank(excepted_name):
+            return sda.upload_from_external(external_url=external_url, remote_folder_path=remote_file_path,
+                                            excepted_name=excepted_name).to_dict()
         return sda.upload_from_external(external_url=external_url, remote_folder_path=remote_file_path).to_dict()
 
     @response_wrapper
@@ -447,7 +451,8 @@ def upload_file_from_external_url():
     eu = request.args.get("external_url") or request.args.get("eu")
     if is_blank(eu):
         return flask.jsonify({"response": "external url is blank in '/api/dropbox/file/upload'", "success": False})
-    res = sda.simple_upload_via_url(external_url=eu)
+    en = request.args.get("excepted_name") or request.args.get('en')
+    res = sda.simple_upload_via_url(external_url=eu, excepted_name=en)
     return flask.jsonify(res)
 
 
@@ -601,7 +606,8 @@ def showtime():
                         mimetype=file_mime
                     )
             # can not match with remote files
-            return flask.jsonify({"response": "rf name can not match with remote files in '/showtime'", "success": False})
+            return flask.jsonify(
+                {"response": "rf name can not match with remote files in '/showtime'", "success": False})
 
 
 # upload demo
