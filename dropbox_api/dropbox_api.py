@@ -9,6 +9,7 @@
 """
 from __future__ import print_function
 
+import asyncio
 import logging
 import os
 import dropbox
@@ -19,7 +20,7 @@ from contextlib import contextmanager
 from flask import Flask, flash, request, redirect, url_for
 from werkzeug.utils import secure_filename
 from dropbox.files import FileMetadata, ListFolderResult
-from typing import List, AnyStr
+from typing import List
 
 level = logging.DEBUG
 format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -33,11 +34,13 @@ ACCESS_TOKEN = 'i8G-xobvWUQAAAAAAAABAAzg8_EbfSdZJIGzH93kXBoBGloa7jJuHEUJ167U34eC
 FILE_SEP = "/"
 FILE_DOT = "."
 
-FILEMETADATA_LIST_TYPE = List[FileMetadata]
-FILEMETADATA_TYPE = FileMetadata
-BOOLEAN_TYPE = bool
-DICT_TYPE = dict
-STR_TYPE = str
+_FILEMETADATA_LIST_TYPE = List[FileMetadata]
+_FILEMETADATA_TYPE = FileMetadata
+_BOOLEAN_TYPE = bool
+_DICT_TYPE = dict
+_STR_TYPE = str
+
+LOOP = asyncio.get_event_loop()
 
 
 class DropboxAPIException(Exception):
@@ -161,7 +164,7 @@ class SimpleDropboxAPI(object):
         self.dbxa = dbx
 
     def upload(self, local_file_path: str, remote_file_path: str = "/DEFAULT/",
-               excepted_name: str = None) -> FILEMETADATA_TYPE:
+               excepted_name: str = None) -> _FILEMETADATA_TYPE:
         if not os.path.isfile(local_file_path):
             raise DropboxAPIException("local file not exist!")
 
@@ -179,7 +182,7 @@ class SimpleDropboxAPI(object):
             metadata = self.dbxa.files_upload(lf.read(), remote_file_path, mute=True)
         return metadata
 
-    def download(self, local_file_path: str, remote_file_path: str, excepted_name: str = None) -> FILEMETADATA_TYPE:
+    def download(self, local_file_path: str, remote_file_path: str, excepted_name: str = None) -> _FILEMETADATA_TYPE:
         """
         download file
         :param local_file_path:
@@ -337,7 +340,7 @@ class SimpleDBXServiceAPI(SimpleDropboxAPI):
     def __init__(self, access_token) -> None:
         super().__init__(access_token=access_token)
 
-    def simple_list_entries(self, remote_folder_path: str) -> FILEMETADATA_LIST_TYPE:
+    def simple_list_entries(self, remote_folder_path: str) -> _FILEMETADATA_LIST_TYPE:
         """
         simple list
         :param remote_folder_path:
@@ -489,6 +492,18 @@ def upload_file():
 def index(): return """ <h1>Welcome To Helixcs's Space. </h1>"""
 
 
+async def write_to_file(file_path: str, w_data: bytes) -> None:
+    with open_file(file_name=file_path, mode='wb') as f_w:
+        f_w.write(w_data)
+
+
+def cache_with_coroutine(file_path: str, w_data: bytes) -> None:
+    coroutine = write_to_file(file_path, w_data)
+    # new_loop = asyncio.new_event_loop()
+    # asyncio.set_event_loop(new_loop)
+    LOOP.run_until_complete(coroutine)
+
+
 @app.route('/showtime')
 def showtime():
     """
@@ -505,7 +520,29 @@ def showtime():
     if is_blank(rf_name):
         return flask.jsonify({"response": "rf name is blank in '/showtime'", "success": False})
 
+    # 优先使用本地缓存
+    local_cache_path = os.path.join(os.getcwd(), "DEFAULT")
+    if not os.path.exists(local_cache_path):
+        os.mkdir(local_cache_path)
+    else:
+        filter_file_list = list(filter(lambda x: str(x).__contains__(rf_name), os.listdir(local_cache_path)))
+        if len(filter_file_list) > 0:
+            cache_file_name = filter_file_list[0]
+            # 缓存中目标文件路径
+            target_cache_file_path = os.path.join(local_cache_path, cache_file_name)
+            if os.path.exists(target_cache_file_path) and os.path.isfile(target_cache_file_path):
+                file_suffix = target_cache_file_path.split(".")[-1]
+                file_mime = get_mime(file_suffix)
+                with open_file(target_cache_file_path, 'rb') as f_read:
+                    return flask.send_file(
+                        io.BytesIO(f_read.read()),
+                        attachment_filename=cache_file_name,
+                        mimetype=file_mime
+                    )
+
+    # path 为空，只保留文件名，例如：googlelogo_color_272x92dp.png
     if is_blank(rf_path.replace("/", "")):
+
         # 默认 default 目录
         rf_path = "/DEFAULT/"
         rsl = sda.simple_list(remote_folder_path=rf_path)
@@ -514,22 +551,31 @@ def showtime():
         for item in rsl.get("response"):
             real_name = item.get("name")
             if str(real_name).__contains__(rf_name):
-                file_suffix = real_name.split(".")[-1] or real_name.split(".")[-1]
+                file_suffix = real_name.split(".")[-1]
                 file_mime = get_mime(file_suffix)
 
                 md, res = sda.download_to_response(remote_file_path=item.get("path"))
+
+                # cache file via coroutine
+                local_cache_file = os.path.join(local_cache_path, real_name)
+                cache_with_coroutine(file_path=local_cache_file, w_data=res.content)
+
                 return flask.send_file(
                     io.BytesIO(res.content),
-                    attachment_filename=rf_name,
+                    attachment_filename=real_name,
                     mimetype=file_mime
                 )
         # can not match with remote files
         return flask.jsonify({"response": "rf name can not match with remote files in '/showtime'", "success": False})
+    # path 不为空，文件名也不为空，例如：/DEFAULT/googlelogo_color_272x92dp.png
     else:
         file_suffix = rfn.split(".")[-1] or rf_name.split(".")[-1]
         file_mime = get_mime(file_suffix)
         try:
             md, res = sda.download_to_response(remote_file_path=rfn)
+            # cache file via coroutine
+            local_cache_file = os.path.join(local_cache_path, rf_name)
+            cache_with_coroutine(file_path=local_cache_file, w_data=res.content)
             return flask.send_file(
                 io.BytesIO(res.content),
                 attachment_filename=rf_name,
@@ -546,14 +592,16 @@ def showtime():
                     file_suffix = real_name.split(".")[-1] or real_name.split(".")[-1]
                     file_mime = get_mime(file_suffix)
                     md, res = sda.download_to_response(remote_file_path=item.get("path"))
+                    # cache file via coroutine
+                    local_cache_file = os.path.join(local_cache_path, real_name)
+                    cache_with_coroutine(file_path=local_cache_file, w_data=res.content)
                     return flask.send_file(
                         io.BytesIO(res.content),
                         attachment_filename=rf_name,
                         mimetype=file_mime
                     )
             # can not match with remote files
-            return flask.jsonify(
-                {"response": "rf name can not match with remote files in '/showtime'", "success": False})
+            return flask.jsonify({"response": "rf name can not match with remote files in '/showtime'", "success": False})
 
 
 # upload demo
@@ -582,4 +630,3 @@ def dropbox_cli():
     """
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
-
