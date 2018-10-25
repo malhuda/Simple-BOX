@@ -71,7 +71,7 @@ def is_not_blank(pstr: str) -> bool:
 
 
 def separate_path_and_name(file_path: str):
-    if file_path is None or file_path.strip("") == '':
+    if is_blank(file_path):
         return None, None
     fps = file_path.split(FILE_SEP)
     f_name = fps[-1]
@@ -83,7 +83,7 @@ def separate_path_and_name(file_path: str):
 
 
 def fetch_filename_from_url(url: str) -> str:
-    if url is None or url.strip("") == '':
+    if is_blank(url):
         return ""
     last_sep = url.split("/")[-1]
     if last_sep.__contains__("?"):
