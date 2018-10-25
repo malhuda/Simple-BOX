@@ -47,5 +47,19 @@ class TestSingleMethod(unittest.TestCase):
         file_name = fetch_filename_from_url(url=url)
         assert file_name == 'bar.jpg'
 
+    def test_queue_pool(self):
+        queue_pool.put_nowait(1)
+        queue_pool.put_nowait(2)
+        queue_pool.put_nowait(3)
+        queue_pool.put_nowait(4)
+        queue_pool.put_nowait(5)
+        queue_pool.put_nowait(6)
+        queue_pool.put_nowait(7)
+        queue_pool.put_nowait(8)
+        queue_pool.put_nowait(9)
+        queue_pool.put_nowait(10)
+        assert queue_pool.full() == True
+
+
 if __name__ == '__main__':
     unittest.main()

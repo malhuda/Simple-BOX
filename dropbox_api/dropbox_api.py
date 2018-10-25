@@ -21,7 +21,6 @@ from flask import Flask, flash, request, redirect, url_for
 from werkzeug.utils import secure_filename
 from dropbox.files import FileMetadata, ListFolderResult
 from typing import List, Optional
-from queue import Queue
 
 level = logging.DEBUG
 format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -44,6 +43,25 @@ _OPTION_STR = Optional[_STR_TYPE]
 
 LOOP = asyncio.get_event_loop()
 
+
+# TODO
+
+class BaseParser(object):
+    def __init__(self, full_path_file_string: str) -> None:
+        pass
+
+
+class FilePathParser(BaseParser):
+    # TODO
+    pass
+
+
+class UrlPathParser(BaseParser):
+    # TODO
+    pass
+
+
+# ......
 
 #  ==>>> single common methods
 
@@ -427,6 +445,12 @@ import flask
 app = flask.Flask(__name__)
 sda = SimpleDBXServiceAPI(access_token=ACCESS_TOKEN)
 
+from queue import Queue
+from concurrent.futures import ThreadPoolExecutor
+
+thread_pool = ThreadPoolExecutor(10)
+queue_pool = Queue(10)
+
 
 @app.route("/api/dropbox/folder/list", methods=['GET', 'POST'])
 def list_folder():
@@ -458,6 +482,12 @@ def upload_file_from_external_url():
     if is_blank(eu):
         return flask.jsonify({"response": "external url is blank in '/api/dropbox/file/upload'", "success": False})
     en = request.args.get("excepted_name") or request.args.get('en')
+
+    # if not queue_pool.full():
+    #     pass
+    future = thread_pool.submit(fn=sda.simple_upload_via_url,external_url=eu, excepted_name=en)
+    if future.done():
+        return flask.jsonify(future.result())
     res = sda.simple_upload_via_url(external_url=eu, excepted_name=en)
     return flask.jsonify(res)
 
