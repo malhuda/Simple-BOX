@@ -11,6 +11,7 @@ google-api-python-client = "*"
 flask-restful = "*"
 dropbox = "*"
 gunicorn = "*"
+pytest = "*"
 
 [dev-packages]
 

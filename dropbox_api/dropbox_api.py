@@ -20,7 +20,8 @@ from contextlib import contextmanager
 from flask import Flask, flash, request, redirect, url_for
 from werkzeug.utils import secure_filename
 from dropbox.files import FileMetadata, ListFolderResult
-from typing import List
+from typing import List, Optional
+from queue import Queue
 
 level = logging.DEBUG
 format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -39,9 +40,12 @@ _FILEMETADATA_TYPE = FileMetadata
 _BOOLEAN_TYPE = bool
 _DICT_TYPE = dict
 _STR_TYPE = str
+_OPTION_STR = Optional[_STR_TYPE]
 
 LOOP = asyncio.get_event_loop()
 
+
+#  ==>>> single common methods
 
 class DropboxAPIException(Exception):
     def __init__(self, message) -> None:
@@ -56,23 +60,14 @@ def open_file(file_name: str, mode: str = 'wb'):
     file.close()
 
 
-def response_wrapper(func):
-    def wrapper(*args, **kwargs):
-        ret_wrapper = {'success': False, 'request': [], 'response': None, 'exception': None}
+# TODO :封装成单独类
 
-        if kwargs is not None and kwargs.__len__() > 0:
-            ret_wrapper['request'].append(str(kwargs))
-        elif args is not None and args.__len__() > 0:
-            ret_wrapper['request'].append(str(args))
-        try:
-            ret = func(*args, **kwargs)
-            ret_wrapper['response'] = ret
-            ret_wrapper['success'] = True
-        except Exception as ex:
-            ret_wrapper['exception'] = str(ex)
-        return ret_wrapper
+def is_blank(pstr: str) -> bool:
+    return True if pstr is None or pstr.strip('') == '' else False
 
-    return wrapper
+
+def is_not_blank(pstr: str) -> bool:
+    return not is_blank(pstr=pstr)
 
 
 def separate_path_and_name(file_path: str):
@@ -98,7 +93,7 @@ def fetch_filename_from_url(url: str) -> str:
     return last_sep
 
 
-def get_mime(file_suffix: str) -> str:
+def get_mime(file_suffix: str) -> Optional[str]:
     if file_suffix is None:
         raise DropboxAPIException("file suffix is None !")
     if file_suffix.startswith("."):
@@ -114,6 +109,28 @@ def get_mime(file_suffix: str) -> str:
         # ....
     }
     return mime_dict.get(file_suffix)
+
+
+def response_wrapper(func):
+    def wrapper(*args, **kwargs):
+        ret_wrapper = {'success': False, 'request': [], 'response': None, 'exception': None}
+
+        if kwargs is not None and kwargs.__len__() > 0:
+            ret_wrapper['request'].append(str(kwargs))
+        elif args is not None and args.__len__() > 0:
+            ret_wrapper['request'].append(str(args))
+        try:
+            ret = func(*args, **kwargs)
+            ret_wrapper['response'] = ret
+            ret_wrapper['success'] = True
+        except Exception as ex:
+            ret_wrapper['exception'] = str(ex)
+        return ret_wrapper
+
+    return wrapper
+
+
+# ==>>>> Some class
 
 
 class SimpleFileMetadata(object):
@@ -401,17 +418,6 @@ class SimpleDBXServiceAPI(SimpleDropboxAPI):
         return SimpleFileMetadata(self.download(local_file_path=local_file_path,
                                                 remote_file_path=remote_file_path,
                                                 excepted_name=excepted_name)).to_dict()
-
-
-def is_blank(pstr: str):
-    """
-    check string whether blank
-    :param pstr:
-    :return:
-    """
-    if pstr is None or pstr.strip('') == '':
-        return True
-    return False
 
 
 # restful API
