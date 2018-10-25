@@ -485,7 +485,7 @@ def upload_file_from_external_url():
 
     # if not queue_pool.full():
     #     pass
-    future = thread_pool.submit(fn=sda.simple_upload_via_url,external_url=eu, excepted_name=en)
+    future = thread_pool.submit(fn=sda.simple_upload_via_url, external_url=eu, excepted_name=en)
     if future.done():
         return flask.jsonify(future.result())
     res = sda.simple_upload_via_url(external_url=eu, excepted_name=en)
