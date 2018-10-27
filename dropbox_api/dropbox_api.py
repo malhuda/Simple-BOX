@@ -17,10 +17,14 @@ import re
 import requests
 import io
 from contextlib import contextmanager
+
+import sys
 from flask import Flask, flash, request, redirect, url_for
 from werkzeug.utils import secure_filename
 from dropbox.files import FileMetadata, ListFolderResult
+
 from typing import List, Optional
+from py_fortify import is_not_blank, is_blank
 
 level = logging.DEBUG
 format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -43,22 +47,11 @@ _OPTION_STR = Optional[_STR_TYPE]
 
 LOOP = asyncio.get_event_loop()
 
-
-# TODO
-
-class BaseParser(object):
-    def __init__(self, full_path_file_string: str) -> None:
-        pass
-
-
-class FilePathParser(BaseParser):
-    # TODO
-    pass
-
-
-class UrlPathParser(BaseParser):
-    # TODO
-    pass
+try:
+    assert sys.version_info.major == 3
+    assert sys.version_info.minor > 5
+except:
+    raise AssertionError("dropbox-api only support 3.6+.")
 
 
 # ......
@@ -76,16 +69,6 @@ def open_file(file_name: str, mode: str = 'wb'):
     yield file
     file.flush()
     file.close()
-
-
-# TODO :封装成单独类
-
-def is_blank(pstr: str) -> bool:
-    return True if pstr is None or pstr.strip('') == '' else False
-
-
-def is_not_blank(pstr: str) -> bool:
-    return not is_blank(pstr=pstr)
 
 
 def separate_path_and_name(file_path: str):
