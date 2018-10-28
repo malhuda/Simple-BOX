@@ -17,7 +17,7 @@ import requests
 import io
 
 import sys
-from flask import Flask, flash, request, redirect, url_for
+from flask import Flask, flash, request, redirect, url_for, render_template
 from werkzeug.utils import secure_filename
 from dropbox.files import FileMetadata, ListFolderResult
 
@@ -418,7 +418,7 @@ class SimpleDBXServiceAPI(SimpleDropboxAPI):
 
 import flask
 
-app = flask.Flask(__name__)
+app = flask.Flask(__name__, template_folder="../templates")
 sda = SimpleDBXServiceAPI(access_token=ACCESS_TOKEN)
 
 from queue import Queue
@@ -426,6 +426,12 @@ from concurrent.futures import ThreadPoolExecutor
 
 thread_pool = ThreadPoolExecutor(10)
 queue_pool = Queue(10)
+
+
+@app.route("/")
+@app.route("/index")
+def index():
+    return render_template("index.html",)
 
 
 @app.route("/api/dropbox/folder/list", methods=['GET', 'POST'])
@@ -503,10 +509,6 @@ def upload_file():
       <input type=submit value=确认上传>
     </form>
     '''
-
-
-@app.route("/", methods=['GET'])
-def index(): return """ <h1>Welcome To Helixcs's Space. </h1>"""
 
 
 async def write_to_file(file_path: str, w_data: bytes) -> None:
