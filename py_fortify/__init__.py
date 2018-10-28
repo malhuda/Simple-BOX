@@ -10,5 +10,12 @@
  py_fortify  python 通用工具封装，遵循PEP8， 意在增强Python现有API 注：fortify 增强
 
 """
+import sys
 from .parser import UrlPathParser, FilePathParser
-from .unity import is_blank, is_not_blank
+from .unity import *
+
+try:
+    assert sys.version_info.major == 3
+    assert sys.version_info.minor > 5
+except Exception as ex:
+    raise AssertionError("pyfortify only support 3.6+ !")

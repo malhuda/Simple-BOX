@@ -11,7 +11,7 @@
 """
 import os
 import re
-from typing import Optional
+from typing import Optional, Tuple, Dict
 from urllib.parse import ParseResult, urlparse
 
 from py_fortify.constants import MIME_DICT
@@ -80,6 +80,20 @@ class FilePathParser(BaseParser):
         if self.source_name is None:
             return self.dirname
         return self.full_path_file_string.replace(self.source_name, "")
+
+    @property
+    def source_suffix(self) -> Optional[str]:
+        return None if self.source_name is None or not self.source_name.__contains__(".") else \
+            self.source_name.split(".")[-1]
+
+    @property
+    def source_mime(self) -> Optional[str]:
+        return None if self.source_suffix is None else MIME_DICT.get(self.source_suffix)
+
+    @property
+    def source_path_and_name(self) -> Tuple[Optional[str], Optional[str]]:
+        return self.source_path, self.source_name
+
     # ....
 
 

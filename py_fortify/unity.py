@@ -8,6 +8,15 @@
  Time: 10/27/18
  常用方法
 """
+from contextlib import contextmanager
+
+
+@contextmanager
+def open_file(file_name: str, mode: str = 'wb'):
+    file = open(file=file_name, mode=mode)
+    yield file
+    file.flush()
+    file.close()
 
 
 def is_blank(pstr: str) -> bool:

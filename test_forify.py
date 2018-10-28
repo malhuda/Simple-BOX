@@ -14,7 +14,9 @@ import ntpath
 import posixpath
 import unittest
 import requests
-from py_fortify import UrlPathParser
+from py_fortify import UrlPathParser, FilePathParser
+from py_fortify.constants import MIME_DICT
+from dropbox_api.dropbox_api import separate_path_and_name
 
 level = logging.DEBUG
 format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -37,6 +39,26 @@ class TestParser(unittest.TestCase):
         path = "C:\\foo\\bar"
         a = os.path.splitdrive(path)
         print(a)
+
+    def test_fileparser(self):
+        file_name_path = "/foo/bar/1.jpg"
+        a = FilePathParser(full_path_file_string=file_name_path)
+        assert a.source_name == '1.jpg'
+        assert a.source_path == '/foo/bar/'
+        assert a.source_suffix == 'jpg'
+        assert a.source_mime == MIME_DICT.get(a.source_suffix)
+
+        file_name_path = "/foo/bar/1"
+        a = FilePathParser(full_path_file_string=file_name_path)
+        assert a.source_name == '1'
+        assert a.source_path == '/foo/bar/'
+        assert a.source_suffix is None
+
+        print("======")
+        path, name = separate_path_and_name(file_name_path)
+        print(path, name)
+        path2, name2 = a.source_path_and_name
+        print(path2, name2)
 
     pass
 

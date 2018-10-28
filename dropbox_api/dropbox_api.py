@@ -13,10 +13,8 @@ import asyncio
 import logging
 import os
 import dropbox
-import re
 import requests
 import io
-from contextlib import contextmanager
 
 import sys
 from flask import Flask, flash, request, redirect, url_for
@@ -24,7 +22,7 @@ from werkzeug.utils import secure_filename
 from dropbox.files import FileMetadata, ListFolderResult
 
 from typing import List, Optional
-from py_fortify import is_not_blank, is_blank
+from py_fortify import is_not_blank, is_blank, open_file, FilePathParser, UrlPathParser
 
 level = logging.DEBUG
 format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -50,7 +48,7 @@ LOOP = asyncio.get_event_loop()
 try:
     assert sys.version_info.major == 3
     assert sys.version_info.minor > 5
-except:
+except Exception as ex:
     raise AssertionError("dropbox-api only support 3.6+.")
 
 
@@ -63,35 +61,30 @@ class DropboxAPIException(Exception):
         self.message = message
 
 
-@contextmanager
-def open_file(file_name: str, mode: str = 'wb'):
-    file = open(file=file_name, mode=mode)
-    yield file
-    file.flush()
-    file.close()
-
-
 def separate_path_and_name(file_path: str):
-    if is_blank(file_path):
-        return None, None
-    fps = file_path.split(FILE_SEP)
-    f_name = fps[-1]
-    f_path = '/'
-    for it in fps[0:-1]:
-        f_path = os.path.join(f_path, it)
-    f_path = f_path + "/"
-    return f_path, f_name
+    # if is_blank(file_path):
+    #     return None, None
+    # fps = file_path.split(FILE_SEP)
+    # f_name = fps[-1]
+    # f_path = '/'
+    # for it in fps[0:-1]:
+    #     f_path = os.path.join(f_path, it)
+    # f_path = f_path + "/"
+    # return f_path, f_name
+    return FilePathParser(full_path_file_string=file_path).source_path_and_name
 
 
 def fetch_filename_from_url(url: str) -> str:
-    if is_blank(url):
-        return ""
-    last_sep = url.split("/")[-1]
-    if last_sep.__contains__("?"):
-        return re.findall(r'^(.+?)\?', last_sep)[0]
-    elif last_sep.__contains__(":"):
-        return re.findall(r'^(.+?):', last_sep)[0]
-    return last_sep
+    # if is_blank(url):
+    #     return ""
+    # last_sep = url.split("/")[-1]
+    # if last_sep.__contains__("?"):
+    #     return re.findall(r'^(.+?)\?', last_sep)[0]
+    # elif last_sep.__contains__(":"):
+    #     return re.findall(r'^(.+?):', last_sep)[0]
+    # return last_sep
+    url_parser = UrlPathParser(full_path_file_string=url)
+    return "" if url_parser.source_name is None else url_parser.source_name
 
 
 def get_mime(file_suffix: str) -> Optional[str]:
