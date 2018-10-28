@@ -7,7 +7,9 @@
  File: __init__.py.py
  Time: 10/27/18
 
- py_fortify  python 通用工具封装，遵循PEP8， 意在增强Python现有API 注：fortify 增强
+ py_fortify  python 通用工具封装，遵循PEP8， 意在增强Python现有API
+
+ 注：fortify 增强
 
 """
 import sys

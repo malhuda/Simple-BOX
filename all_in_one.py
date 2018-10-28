@@ -19,7 +19,7 @@ logging.basicConfig(level=level, format=format, datefmt=datefmt)
 logger = logging.getLogger(__name__)
 logger.setLevel(level)
 
-from dropbox_api import dropbox_api, app
+from dropbox_api import app
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
