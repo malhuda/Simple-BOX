@@ -10,6 +10,8 @@
 import logging
 import sys
 import os
+import ntpath
+import posixpath
 import unittest
 import requests
 from py_fortify import UrlPathParser
@@ -30,6 +32,11 @@ class TestParser(unittest.TestCase):
         url = 'https://foo.com/bar.jpg?parms1=1&params2=2#fake'
         u = UrlPathParser(full_path_file_string=url)
         print(u)
+
+    def test_ospath(self):
+        path = "C:\\foo\\bar"
+        a = os.path.splitdrive(path)
+        print(a)
 
     pass
 

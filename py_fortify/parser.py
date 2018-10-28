@@ -48,6 +48,38 @@ class FilePathParser(BaseParser):
     def is_exist(self) -> bool:
         return os.path.exists(self.full_path_file_string)
 
+    @property
+    def is_file(self) -> bool:
+        return os.path.isfile(self.full_path_file_string)
+
+    @property
+    def is_dir(self) -> bool:
+        return os.path.isdir(self.full_path_file_string)
+
+    @property
+    def driver(self) -> Optional[str]:
+        return None if is_blank(os.path.splitdrive(self.full_path_file_string)[0]) else \
+            os.path.splitdrive(self.full_path_file_string)[0]
+
+    @property
+    def dirname(self) -> Optional[str]:
+        return None if is_blank(os.path.dirname(self.full_path_file_string)) else os.path.dirname(
+            self.full_path_file_string)
+
+    @property
+    def basename(self) -> Optional[str]:
+        return None if is_blank(os.path.basename(self.full_path_file_string)) else os.path.basename(
+            self.full_path_file_string)
+
+    @property
+    def source_name(self) -> Optional[str]:
+        return self.basename
+
+    @property
+    def source_path(self) -> Optional[str]:
+        if self.source_name is None:
+            return self.dirname
+        return self.full_path_file_string.replace(self.source_name, "")
     # ....
 
 
@@ -148,4 +180,3 @@ class UrlPathParser(BaseParser):
     @property
     def source_mime(self) -> Optional[str]:
         return None if is_blank(self.source_suffix) else MIME_DICT.get(self.source_suffix)
-
