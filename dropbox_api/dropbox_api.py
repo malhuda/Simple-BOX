@@ -84,7 +84,7 @@ def fetch_filename_from_url(url: str) -> str:
     #     return re.findall(r'^(.+?):', last_sep)[0]
     # return last_sep
     url_parser = UrlPathParser(full_path_file_string=url)
-    return "" if url_parser.source_name is None else url_parser.source_name
+    return "" if url_parser.source_name_and_suffix is None else url_parser.source_name_and_suffix
 
 
 def get_mime(file_suffix: str) -> Optional[str]:
