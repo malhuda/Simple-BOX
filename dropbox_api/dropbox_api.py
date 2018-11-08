@@ -163,11 +163,12 @@ class SimpleFileMetadata(object):
 
 
 class SimpleDropboxAPI(object):
-    __slots__ = ['access_token', 'dbxa']
+    __slots__ = ['access_token', 'dbxa','loop']
 
     def __init__(self, access_token):
         self.access_token = access_token
         self.dbxa = None
+        self.loop = asyncio.get_event_loop()
 
     def dbx(self) -> None:
         dbx = dropbox.Dropbox(self.access_token)
@@ -176,6 +177,49 @@ class SimpleDropboxAPI(object):
         self.dbxa = dbx
 
     def upload(self,
+               local_file_path: str,
+               remote_file_path: str,
+               excepted_name: str = None) -> _FILEMETADATA_TYPE:
+        """
+        upload to dropbox
+        :param local_file_path:  file path in local
+        :param remote_file_path: file path in dropbox
+        :param excepted_name:   excepted name which want to rename
+        :return:
+        """
+        if is_blank(local_file_path):
+            raise DropboxAPIException("SimpleDropboxAPI#upload local_file_path is blank!")
+
+        if is_blank(local_file_path):
+            raise DropboxAPIException("SimpleDropboxAPI#upload remote_file_path is blank!")
+
+        if not os.path.isfile(local_file_path):
+            raise DropboxAPIException("SimpleDropboxAPI#upload local_file_path not exist!")
+
+        if is_blank(excepted_name):
+            excepted_name = local_file_path.split(FILE_SEP)[-1]
+
+        # not exist file name, sample as `/foo/bar/`, in this case , `remote_file_path` will be set as
+        # `/foo/bar`+excepted_name
+
+        # if `remote_file_path` is `/foo/bar` or `/foo/bar.txt` ,then `bar` or `bar.txt` will be excepted_name
+        if not remote_file_path.__contains__(FILE_DOT) and is_blank(remote_file_path.split(FILE_SEP)[-1]):
+            remote_file_path = os.path.join(remote_file_path, excepted_name)
+
+        if logger.level == logging.DEBUG:
+            logger.debug("SimpleDropboxAPI#upload , remote_file_path is %s" % remote_file_path)
+
+        if self.dbxa is None:
+            self.dbx()
+
+        with open_file(file_name=local_file_path, mode='rb') as lf:
+            metadata = self.dbxa.files_upload(lf.read(), remote_file_path, mute=True)
+
+        return metadata
+
+    # TODO async upload
+
+    def aupload(self,
                local_file_path: str,
                remote_file_path: str,
                excepted_name: str = None) -> _FILEMETADATA_TYPE:
