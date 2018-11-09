@@ -279,7 +279,10 @@ class SimpleDropboxAPI(object):
 
         rf_path, rf_name = separate_path_and_name(remote_folder_path)
 
-        if is_blank(excepted_name):
+        if logger.level == logging.DEBUG:
+            logger.debug("SimpleDropboxAPI#upload_from_bytes , rf_path is %s , rf_name is %s", (rf_path, rf_name))
+
+        if is_not_blank(excepted_name):
             rf_name = excepted_name
 
         remote_folder_path = os.path.join(rf_path, rf_name)
