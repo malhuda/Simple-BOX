@@ -27,11 +27,11 @@ class TestSingleMethod(unittest.TestCase):
         path_and_name = "/foo/bar/"
         path, name = separate_path_and_name(path_and_name)
         assert path == '/foo/bar/'
-        assert name == ''
+        assert name is None
 
         path_and_name = "foo/bar"
         path, name = separate_path_and_name(path_and_name)
-        assert path == '/foo/'
+        assert path == 'foo/'
         assert name == 'bar'
 
     def test_fetch_filename_from_url(self):
@@ -61,8 +61,18 @@ class TestSingleMethod(unittest.TestCase):
         assert queue_pool.full() == True
 
 
+class TestDropboxApi(unittest.TestCase):
+    """
+    test dropbox api
+    """
 
-
+    def test_upload(self):
+        sda = SimpleDropboxAPI(access_token="i8G-xobvWUQAAAAAAAABAAzg8_EbfSdZJIGzH93kXBoBGloa7jJuHEUJ167U34eC")
+        sdau = sda.upload(
+            local_file_path=r"C:\Users\wb-zj268791\Desktop\qita\v2-6130c5c395606f046a845fb7f1d4094f_hd.jpg",
+            remote_file_path="/DEFAULT/v2-6130c5c395606f046a845fb7f1d4094f_hd.jpg",
+            excepted_name="")
+        print(sdau)
 
 
 if __name__ == '__main__':

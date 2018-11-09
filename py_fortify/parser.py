@@ -78,7 +78,7 @@ class FilePathParser(BaseParser):
     @property
     def source_path(self) -> Optional[str]:
         if self.source_name is None:
-            return self.dirname
+            return self.full_path_file_string
         return self.full_path_file_string.replace(self.source_name, "")
 
     @property
