@@ -67,7 +67,7 @@ class TestDropboxApi(unittest.TestCase):
     """
 
     def test_upload(self):
-        sda = SimpleDropboxAPI(access_token="i8G-xobvWUQAAAAAAAABAAzg8_EbfSdZJIGzH93kXBoBGloa7jJuHEUJ167U34eC")
+        sda = SimpleDropboxAPI(access_token="")
         sdau = sda.upload(
             local_file_path=r"C:\Users\wb-zj268791\Desktop\qita\v2-6130c5c395606f046a845fb7f1d4094f_hd.jpg",
             remote_file_path="/DEFAULT/v2-6130c5c395606f046a845fb7f1d4094f_hd.jpg",
