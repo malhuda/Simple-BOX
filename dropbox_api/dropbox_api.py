@@ -23,6 +23,7 @@ from dropbox.files import FileMetadata, ListFolderResult
 
 from typing import List, Optional
 from py_fortify import is_not_blank, is_blank, open_file, FilePathParser, UrlPathParser
+from py_fortify.parser import BaseParser
 
 level = logging.DEBUG
 format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -57,6 +58,11 @@ except Exception as ex:
 #  ==>>> single common methods
 
 class DropboxAPIException(Exception):
+    def __init__(self, message) -> None:
+        self.message = message
+
+
+class SimpleAPIException(Exception):
     def __init__(self, message) -> None:
         self.message = message
 
@@ -162,13 +168,38 @@ class SimpleFileMetadata(object):
                 'hash': self.__hash__()}
 
 
-class SimpleDropboxAPI(object):
+class SimpleAPI(object):
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def upload(self,
+               local_file_path: str,
+               remote_file_path: str):
+        if is_blank(local_file_path):
+            raise SimpleAPIException(message="SimpleAPI#upload local_file_path is blank!")
+
+        if is_blank(remote_file_path):
+            raise SimpleAPIException(message="SimpleAPI#upload remote_file_path is blank!")
+        pass
+
+    def download(self,
+                 local_file_path: str,
+                 remote_file_path: str):
+        if is_blank(local_file_path):
+            raise SimpleAPIException(message="SimpleAPI#upload local_file_path is blank!")
+
+        if is_blank(remote_file_path):
+            raise SimpleAPIException(message="SimpleAPI#upload remote_file_path is blank!")
+        pass
+
+
+class SimpleDropboxAPIV2(SimpleAPI):
     __slots__ = ['access_token', 'dbxa', 'loop']
 
-    def __init__(self, access_token):
-        self.access_token = access_token
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.access_token = kwargs.get("access_token")
         self.dbxa = None
-        self.loop = asyncio.get_event_loop()
 
     def dbx(self) -> None:
         dbx = dropbox.Dropbox(self.access_token)
@@ -178,8 +209,16 @@ class SimpleDropboxAPI(object):
 
     def upload(self,
                local_file_path: str,
-               remote_file_path: str,
-               excepted_name: str = None) -> _FILEMETADATA_TYPE:
+               remote_file_path: BaseParser
+               ):
+        print(local_file_path)
+        print(remote_file_path)
+        pass
+
+    def upload_with_excepted_name(self,
+                                  local_file_path: str,
+                                  remote_file_path: str,
+                                  excepted_name: str = None) -> _FILEMETADATA_TYPE:
         """
         upload to dropbox
         :param local_file_path:  file path in local
@@ -215,10 +254,13 @@ class SimpleDropboxAPI(object):
         with open_file(file_name=local_file_path, mode='rb') as lf:
             metadata = self.dbxa.files_upload(lf.read(), remote_file_path, mute=True)
 
+        if logger.level == logging.DEBUG:
+            logger.debug("SimpleDropboxAPI#upload metadata is %s" % metadata)
         return metadata
 
     # TODO async upload
 
+    @asyncio.coroutine
     def aupload(self,
                 local_file_path: str,
                 remote_file_path: str,
@@ -256,7 +298,281 @@ class SimpleDropboxAPI(object):
             self.dbx()
 
         with open_file(file_name=local_file_path, mode='rb') as lf:
+            metadata = yield from self.dbxa.files_upload(lf.read(), remote_file_path, mute=True)
+
+        return metadata
+
+    def upload_from_bytes(self,
+                          file_bytes: bytes,
+                          remote_folder_path: str,
+                          excepted_name: str) -> SimpleFileMetadata:
+        """
+        upload to dropbox from bytes
+        :param file_bytes:          file byte array
+        :param remote_folder_path:  remote folder path
+        :param excepted_name:       excepted name
+        :return:
+        """
+        if file_bytes is None:
+            raise DropboxAPIException("SimpleDropboxAPI#upload_from_bytes , bytes is blank")
+
+        if remote_folder_path is None or remote_folder_path.strip("") == '':
+            raise DropboxAPIException("SimpleDropboxAPI#upload_from_bytes , remote file path is blank!")
+
+        rf_path, rf_name = separate_path_and_name(remote_folder_path)
+
+        if logger.level == logging.DEBUG:
+            logger.debug("SimpleDropboxAPI#upload_from_bytes , rf_path is %s , rf_name is %s", (rf_path, rf_name))
+
+        if is_not_blank(excepted_name):
+            rf_name = excepted_name
+
+        remote_folder_path = os.path.join(rf_path, rf_name)
+
+        if self.dbxa is None:
+            self.dbx()
+
+        md = self.dbxa.files_upload(file_bytes, remote_folder_path, mute=True)
+        return SimpleFileMetadata(md)
+
+    def upload_from_external(self, external_url: str, remote_folder_path: str, **kwargs) -> SimpleFileMetadata:
+        """
+        upload file which from external url
+        :param external_url:        url from external source
+        :param remote_folder_path:  dropbox folder path
+        :param kwargs:
+        :return:
+        """
+        if is_blank(remote_folder_path):
+            raise DropboxAPIException("upload remote file path is None!")
+        if is_blank(external_url):
+            raise DropboxAPIException("upload external url is None!")
+        if not external_url.startswith("http"):
+            raise DropboxAPIException("upload external url is unknown protocol!")
+
+        timeout = kwargs.get("custom_timeout") or 10
+        rf_path, rf_name = separate_path_and_name(remote_folder_path)
+        excepted_name = kwargs.get("excepted_name")
+        if excepted_name is not None and not excepted_name.strip("") == '':
+            rf_name = excepted_name
+        else:
+            if rf_name is None or rf_name.strip('') == '':
+                rf_name = fetch_filename_from_url(external_url)
+
+        if rf_name is None or rf_name.strip('') == '':
+            raise DropboxAPIException("upload from external unknown name which is upload")
+        remote_folder_path = os.path.join(rf_path, rf_name)
+
+        if kwargs.get('custom_headers') is not None:
+            custom_headers = kwargs.get('custom_headers')
+            res = requests.get(url=external_url, headers=custom_headers, timeout=timeout, stream=True)
+        else:
+            res = requests.get(url=external_url, timeout=timeout, stream=True)
+        if res.status_code != 200:
+            raise DropboxAPIException("upload from external request failed! raw response is %s" % res.text)
+        buffer = io.BytesIO()
+        for chunk in res.iter_content(chunk_size=20):
+            if chunk:
+                buffer.write(chunk)
+            else:
+                break
+
+        if logger.level == logging.DEBUG:
+            logger.info("upload from external request <%s> success!" % external_url)
+        if self.dbxa is None:
+            self.dbx()
+        md = self.dbxa.files_upload(buffer.getvalue(), remote_folder_path, mute=True)
+        if not buffer.closed:
+            buffer.close()
+        return SimpleFileMetadata(md)
+
+    def download(self,
+                 local_file_path: str,
+                 remote_file_path: str,
+                 excepted_name: str = None) -> _FILEMETADATA_TYPE:
+        """
+        download file from dropbox
+        :param local_file_path:      local file path which download
+        :param remote_file_path:    remote file path which dropbox contain
+        :param excepted_name:       excepted name which want to save
+        :return:
+        """
+        if is_blank(pstr=remote_file_path):
+            raise DropboxAPIException("SimpleDropboxAPI#download remote_file_path is blank")
+
+        if local_file_path is not None:
+            while '//' in local_file_path:
+                local_file_path = local_file_path.replace('//', '/')
+        if remote_file_path is not None:
+            while '//' in remote_file_path:
+                remote_file_path = remote_file_path.replace('//', '/')
+
+        rf_path, rf_name = separate_path_and_name(file_path=remote_file_path)
+        if rf_name is None or rf_name.strip('') == '':
+            raise DropboxAPIException("download remote file is not exist!")
+        lf_path, lf_name = separate_path_and_name(file_path=local_file_path)
+        if lf_path is not None:
+            if not os.path.exists(lf_path):
+                os.mkdir(lf_path)
+        else:
+            lf_path = os.getcwd()
+
+        if excepted_name is not None:
+            lf_name = excepted_name
+        else:
+            if lf_name is None or lf_name.strip("") == '':
+                lf_name = rf_name
+        local_file_path = os.path.join(lf_path, lf_name)
+        if self.dbxa is None:
+            self.dbx()
+        # metadata, response = self.dbxa.files_download(remote_file_path)
+        metadata, response = self.download_to_response(remote_file_path)
+        with open_file(file_name=local_file_path, mode='wb') as lf:
+            lf.write(response.content)
+        return metadata
+
+    def list(self, remote_folder_path: str) -> ListFolderResult:
+        """
+        list files in folder
+        :param remote_folder_path:
+        :return:
+        """
+        if remote_folder_path is None:
+            raise DropboxAPIException("list remote folder path is None")
+
+        while '//' in remote_folder_path:
+            remote_folder_path = remote_folder_path.replace('//', '/')
+        rf_path, rf_name = separate_path_and_name(remote_folder_path)
+        if rf_path is None or rf_path.strip() == '':
+            raise DropboxAPIException("list remote folder path is None")
+
+        if self.dbxa is None:
+            self.dbx()
+        return self.dbxa.files_list_folder(rf_path)
+
+    def download_to_response(self, remote_file_path: str):
+        """
+        download to response which is from `request`
+        :param remote_file_path:
+        :return:
+        """
+        if remote_file_path is None or remote_file_path.strip() == '':
+            raise DropboxAPIException("download to bytes remote file path is None")
+        rf_path, rf_name = separate_path_and_name(file_path=remote_file_path)
+        if rf_name is None or rf_name.strip('') == '':
+            raise DropboxAPIException("download to bytes remote file is not exist!")
+        if self.dbxa is None:
+            self.dbx()
+        metadata, response = self.dbxa.files_download(remote_file_path)
+        return metadata, response
+
+
+class SimpleDropboxAPI(object):
+    __slots__ = ['access_token', 'dbxa', 'loop']
+
+    def __init__(self, access_token):
+        self.access_token = access_token
+        self.dbxa = None
+        self.loop = asyncio.get_event_loop()
+
+    def dbx(self) -> None:
+        dbx = dropbox.Dropbox(self.access_token)
+        if dbx is None:
+            raise DropboxAPIException("SimpleDropboxAPI#dbx dbx is None!")
+        self.dbxa = dbx
+
+    def upload(self,
+               local_file_path: str,
+               remote_file_path: BaseParser
+               ):
+        print(local_file_path)
+        print(remote_file_path)
+        pass
+
+    def upload_with_excepted_name(self,
+                                  local_file_path: str,
+                                  remote_file_path: str,
+                                  excepted_name: str = None) -> _FILEMETADATA_TYPE:
+        """
+        upload to dropbox
+        :param local_file_path:  file path in local
+        :param remote_file_path: file path in dropbox
+        :param excepted_name:   excepted name which want to rename
+        :return:
+        """
+        if is_blank(local_file_path):
+            raise DropboxAPIException("SimpleDropboxAPI#upload local_file_path is blank!")
+
+        if is_blank(local_file_path):
+            raise DropboxAPIException("SimpleDropboxAPI#upload remote_file_path is blank!")
+
+        if not os.path.isfile(local_file_path):
+            raise DropboxAPIException("SimpleDropboxAPI#upload local_file_path not exist!")
+
+        if is_blank(excepted_name):
+            excepted_name = local_file_path.split(FILE_SEP)[-1]
+
+        # not exist file name, sample as `/foo/bar/`, in this case , `remote_file_path` will be set as
+        # `/foo/bar`+excepted_name
+
+        # if `remote_file_path` is `/foo/bar` or `/foo/bar.txt` ,then `bar` or `bar.txt` will be excepted_name
+        if not remote_file_path.__contains__(FILE_DOT) and is_blank(remote_file_path.split(FILE_SEP)[-1]):
+            remote_file_path = os.path.join(remote_file_path, excepted_name)
+
+        if logger.level == logging.DEBUG:
+            logger.debug("SimpleDropboxAPI#upload , remote_file_path is %s" % remote_file_path)
+
+        if self.dbxa is None:
+            self.dbx()
+
+        with open_file(file_name=local_file_path, mode='rb') as lf:
             metadata = self.dbxa.files_upload(lf.read(), remote_file_path, mute=True)
+
+        if logger.level == logging.DEBUG:
+            logger.debug("SimpleDropboxAPI#upload metadata is %s" % metadata)
+        return metadata
+
+    # TODO async upload
+
+    @asyncio.coroutine
+    def aupload(self,
+                local_file_path: str,
+                remote_file_path: str,
+                excepted_name: str = None) -> _FILEMETADATA_TYPE:
+        """
+        upload to dropbox
+        :param local_file_path:  file path in local
+        :param remote_file_path: file path in dropbox
+        :param excepted_name:   excepted name which want to rename
+        :return:
+        """
+        if is_blank(local_file_path):
+            raise DropboxAPIException("SimpleDropboxAPI#upload local_file_path is blank!")
+
+        if is_blank(local_file_path):
+            raise DropboxAPIException("SimpleDropboxAPI#upload remote_file_path is blank!")
+
+        if not os.path.isfile(local_file_path):
+            raise DropboxAPIException("SimpleDropboxAPI#upload local_file_path not exist!")
+
+        if is_blank(excepted_name):
+            excepted_name = local_file_path.split(FILE_SEP)[-1]
+
+        # not exist file name, sample as `/foo/bar/`, in this case , `remote_file_path` will be set as
+        # `/foo/bar`+excepted_name
+
+        # if `remote_file_path` is `/foo/bar` or `/foo/bar.txt` ,then `bar` or `bar.txt` will be excepted_name
+        if not remote_file_path.__contains__(FILE_DOT) and is_blank(remote_file_path.split(FILE_SEP)[-1]):
+            remote_file_path = os.path.join(remote_file_path, excepted_name)
+
+        if logger.level == logging.DEBUG:
+            logger.debug("SimpleDropboxAPI#upload , remote_file_path is %s" % remote_file_path)
+
+        if self.dbxa is None:
+            self.dbx()
+
+        with open_file(file_name=local_file_path, mode='rb') as lf:
+            metadata = yield from self.dbxa.files_upload(lf.read(), remote_file_path, mute=True)
 
         return metadata
 

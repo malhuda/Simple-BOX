@@ -60,6 +60,11 @@ class TestParser(unittest.TestCase):
         path2, name2 = a.source_path_and_name
         print(path2, name2)
 
+
+        file_name_path = ""
+        a = FilePathParser(full_path_file_string=None)
+        print(a)
+
     pass
 
 

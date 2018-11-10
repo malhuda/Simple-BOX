@@ -27,8 +27,8 @@ class BaseParser(object):
     def __init__(self, full_path_file_string: str) -> None:
         self.full_path_file_string = full_path_file_string
 
-        if is_blank(self.full_path_file_string):
-            raise ValueError("full path file string is blank")
+        # if is_blank(self.full_path_file_string):
+        #     raise ValueError("full path file string is blank")
 
     @property
     def raw_string(self) -> str:

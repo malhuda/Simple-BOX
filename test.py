@@ -9,6 +9,7 @@
 """
 
 import unittest
+import asyncio
 
 from dropbox_api.dropbox_api import *
 
@@ -67,12 +68,29 @@ class TestDropboxApi(unittest.TestCase):
     """
 
     def test_upload(self):
-        sda = SimpleDropboxAPI(access_token="")
+        sda = SimpleDropboxAPI(access_token="i8G-xobvWUQAAAAAAAABAAzg8_EbfSdZJIGzH93kXBoBGloa7jJuHEUJ167U34eC")
         sdau = sda.upload(
             local_file_path=r"C:\Users\wb-zj268791\Desktop\qita\v2-6130c5c395606f046a845fb7f1d4094f_hd.jpg",
             remote_file_path="/DEFAULT/v2-6130c5c395606f046a845fb7f1d4094f_hd.jpg",
             excepted_name="")
         print(sdau)
+
+
+    def test_aupload(self):
+        loop = asyncio.get_event_loop()
+        sda = SimpleDropboxAPI(access_token="i8G-xobvWUQAAAAAAAABAAzg8_EbfSdZJIGzH93kXBoBGloa7jJuHEUJ167U34eC")
+        aa = loop.run_in_executor(None,sda.aupload,(r"C:\Users\wb-zj268791\Desktop\qita\v2-6130c5c395606f046a845fb7f1d4094f_hd.jpg",
+                                               "/DEFAULT/v2-6130c5c395606f046a845fb7f1d4094f_hd.jpg"))
+        r1 = yield  from aa
+        print(r1._id_value)
+        #
+        #
+        # metadata = loop.run_until_complete(sda.aupload(
+        #     local_file_path=r"C:\Users\wb-zj268791\Desktop\qita\v2-6130c5c395606f046a845fb7f1d4094f_hd.jpg",
+        #     remote_file_path="/DEFAULT/v2-6130c5c395606f046a845fb7f1d4094f_hd.jpg",
+        #     excepted_name=""
+        # ))
+        # print(metadata)
 
 
 if __name__ == '__main__':
