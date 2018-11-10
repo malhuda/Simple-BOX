@@ -169,32 +169,52 @@ class SimpleFileMetadata(object):
 
 
 class SimpleAPI(object):
+    __slots__ = ['option_map', 'loop', ]
+
     def __init__(self, *args, **kwargs):
-        pass
+        # just ext data
+        self.option_map = {}
+        self.loop = self.option_map.get('loop', asyncio.get_event_loop())
 
     def upload(self,
                local_file_path: str,
                remote_file_path: str):
-        if is_blank(local_file_path):
-            raise SimpleAPIException(message="SimpleAPI#upload local_file_path is blank!")
 
+        # just invalid path
         if is_blank(remote_file_path):
             raise SimpleAPIException(message="SimpleAPI#upload remote_file_path is blank!")
+
+        __local_file_path_parser = FilePathParser(full_path_file_string=local_file_path)
+
+        if __local_file_path_parser.is_blank:
+            raise SimpleAPIException(message="SimpleAPI#upload local_file_path is blank!")
+
+        if __local_file_path_parser.is_not_exist:
+            raise SimpleAPIException(message="SimpleAPI#upload local_file_path is not exist !")
+
         pass
 
     def download(self,
                  local_file_path: str,
                  remote_file_path: str):
-        if is_blank(local_file_path):
-            raise SimpleAPIException(message="SimpleAPI#upload local_file_path is blank!")
-
+        # just invalid path
         if is_blank(remote_file_path):
-            raise SimpleAPIException(message="SimpleAPI#upload remote_file_path is blank!")
+            raise SimpleAPIException(message="SimpleAPI#download remote_file_path is blank!")
+
+        __local_file_path_parser = FilePathParser(full_path_file_string=local_file_path)
+
+        if __local_file_path_parser.is_blank:
+            raise SimpleAPIException(message="SimpleAPI#download local_file_path is blank!")
+
+        if __local_file_path_parser.is_not_exist:
+            raise SimpleAPIException(message="SimpleAPI#download local_file_path is not exist !")
+
         pass
 
 
 class SimpleDropboxAPIV2(SimpleAPI):
-    __slots__ = ['access_token', 'dbxa', 'loop']
+    """ Simple Dropbox API , `access_token` is dropbox token"""
+    __slots__ = ['access_token', 'dbxa', ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -209,11 +229,52 @@ class SimpleDropboxAPIV2(SimpleAPI):
 
     def upload(self,
                local_file_path: str,
-               remote_file_path: BaseParser
-               ):
-        print(local_file_path)
-        print(remote_file_path)
-        pass
+               remote_file_path: str, ) -> _FILEMETADATA_TYPE:
+
+        super(SimpleDropboxAPIV2, self).upload(local_file_path=local_file_path, remote_file_path=remote_file_path)
+        if logger.level == logging.DEBUG:
+            logger.debug("SimpleDropboxAPI#upload local_file_path=%s , remote_file_path=%s" % (
+                local_file_path, remote_file_path))
+
+        if self.dbxa is None:
+            self.dbx()
+
+        with open_file(file_name=local_file_path, mode='rb') as lf:
+            metadata = self.dbxa.files_upload(lf.read(), remote_file_path, mute=True)
+
+        if logger.level == logging.DEBUG:
+            logger.debug("SimpleDropboxAPI#upload metadata=%s" % metadata)
+        return metadata
+
+    async def async_upload(self,
+                           local_file_path: str,
+                           remote_file_path: str) -> _FILEMETADATA_TYPE:
+        """
+        async upload
+        :param local_file_path:  local file path
+        :param remote_file_path: remote file path
+        :return:  metadata
+        """
+
+        async def _inner_upload():
+            return self.upload(local_file_path=local_file_path,
+                               remote_file_path=remote_file_path)
+
+        metadata = await _inner_upload()
+        return metadata
+
+    def aupload(self,
+                local_file_path: str,
+                remote_file_path: str) -> _FILEMETADATA_TYPE:
+        """
+        aupload
+        :param local_file_path:
+        :param remote_file_path:
+        :return:
+        """
+        if self.loop is None:
+            self.loop = asyncio.get_event_loop()
+        return self.loop.run_until_complete(self.async_upload(local_file_path, remote_file_path))
 
     def upload_with_excepted_name(self,
                                   local_file_path: str,
@@ -226,17 +287,6 @@ class SimpleDropboxAPIV2(SimpleAPI):
         :param excepted_name:   excepted name which want to rename
         :return:
         """
-        if is_blank(local_file_path):
-            raise DropboxAPIException("SimpleDropboxAPI#upload local_file_path is blank!")
-
-        if is_blank(local_file_path):
-            raise DropboxAPIException("SimpleDropboxAPI#upload remote_file_path is blank!")
-
-        if not os.path.isfile(local_file_path):
-            raise DropboxAPIException("SimpleDropboxAPI#upload local_file_path not exist!")
-
-        if is_blank(excepted_name):
-            excepted_name = local_file_path.split(FILE_SEP)[-1]
 
         # not exist file name, sample as `/foo/bar/`, in this case , `remote_file_path` will be set as
         # `/foo/bar`+excepted_name
@@ -256,50 +306,6 @@ class SimpleDropboxAPIV2(SimpleAPI):
 
         if logger.level == logging.DEBUG:
             logger.debug("SimpleDropboxAPI#upload metadata is %s" % metadata)
-        return metadata
-
-    # TODO async upload
-
-    @asyncio.coroutine
-    def aupload(self,
-                local_file_path: str,
-                remote_file_path: str,
-                excepted_name: str = None) -> _FILEMETADATA_TYPE:
-        """
-        upload to dropbox
-        :param local_file_path:  file path in local
-        :param remote_file_path: file path in dropbox
-        :param excepted_name:   excepted name which want to rename
-        :return:
-        """
-        if is_blank(local_file_path):
-            raise DropboxAPIException("SimpleDropboxAPI#upload local_file_path is blank!")
-
-        if is_blank(local_file_path):
-            raise DropboxAPIException("SimpleDropboxAPI#upload remote_file_path is blank!")
-
-        if not os.path.isfile(local_file_path):
-            raise DropboxAPIException("SimpleDropboxAPI#upload local_file_path not exist!")
-
-        if is_blank(excepted_name):
-            excepted_name = local_file_path.split(FILE_SEP)[-1]
-
-        # not exist file name, sample as `/foo/bar/`, in this case , `remote_file_path` will be set as
-        # `/foo/bar`+excepted_name
-
-        # if `remote_file_path` is `/foo/bar` or `/foo/bar.txt` ,then `bar` or `bar.txt` will be excepted_name
-        if not remote_file_path.__contains__(FILE_DOT) and is_blank(remote_file_path.split(FILE_SEP)[-1]):
-            remote_file_path = os.path.join(remote_file_path, excepted_name)
-
-        if logger.level == logging.DEBUG:
-            logger.debug("SimpleDropboxAPI#upload , remote_file_path is %s" % remote_file_path)
-
-        if self.dbxa is None:
-            self.dbx()
-
-        with open_file(file_name=local_file_path, mode='rb') as lf:
-            metadata = yield from self.dbxa.files_upload(lf.read(), remote_file_path, mute=True)
-
         return metadata
 
     def upload_from_bytes(self,

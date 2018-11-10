@@ -11,12 +11,11 @@
 """
 import os
 import re
-from typing import Optional, Tuple, Dict
+from typing import Optional, Tuple
 from urllib.parse import ParseResult, urlparse
 
 from py_fortify.constants import MIME_DICT
 from py_fortify.unity import is_blank
-from py_fortify.log import logger
 
 
 # TODO
@@ -27,12 +26,21 @@ class BaseParser(object):
     def __init__(self, full_path_file_string: str) -> None:
         self.full_path_file_string = full_path_file_string
 
-        # if is_blank(self.full_path_file_string):
-        #     raise ValueError("full path file string is blank")
+        if self.full_path_file_string is None:
+            raise ValueError("full path file string is None!")
+
+    @property
+    def is_blank(self) -> bool:
+        return is_blank(self.full_path_file_string)
 
     @property
     def raw_string(self) -> str:
         return self.full_path_file_string
+
+    @raw_string.setter
+    def set_raw_string(self, value) -> None:
+        assert value is not None
+        self.full_path_file_string = value
 
         # .....
 
@@ -47,6 +55,10 @@ class FilePathParser(BaseParser):
     @property
     def is_exist(self) -> bool:
         return os.path.exists(self.full_path_file_string)
+
+    @property
+    def is_not_exist(self) -> bool:
+        return not self.is_exist
 
     @property
     def is_file(self) -> bool:
@@ -106,10 +118,6 @@ class UrlPathParser(BaseParser):
     @property
     def parsed(self) -> ParseResult:
         return self._parsed
-
-    @parsed.setter
-    def set_parsed(self, value) -> None:
-        self._parsed = value
 
     @property
     def is_http(self) -> bool:
