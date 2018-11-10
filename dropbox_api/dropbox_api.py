@@ -246,36 +246,6 @@ class SimpleDropboxAPIV2(SimpleAPI):
             logger.debug("SimpleDropboxAPI#upload metadata=%s" % metadata)
         return metadata
 
-    async def async_upload(self,
-                           local_file_path: str,
-                           remote_file_path: str) -> _FILEMETADATA_TYPE:
-        """
-        async upload
-        :param local_file_path:  local file path
-        :param remote_file_path: remote file path
-        :return:  metadata
-        """
-
-        async def _inner_upload():
-            return self.upload(local_file_path=local_file_path,
-                               remote_file_path=remote_file_path)
-
-        metadata = await _inner_upload()
-        return metadata
-
-    def aupload(self,
-                local_file_path: str,
-                remote_file_path: str) -> _FILEMETADATA_TYPE:
-        """
-        aupload
-        :param local_file_path:
-        :param remote_file_path:
-        :return:
-        """
-        if self.loop is None:
-            self.loop = asyncio.get_event_loop()
-        return self.loop.run_until_complete(self.async_upload(local_file_path, remote_file_path))
-
     def upload_with_excepted_name(self,
                                   local_file_path: str,
                                   remote_file_path: str,
@@ -471,6 +441,41 @@ class SimpleDropboxAPIV2(SimpleAPI):
             self.dbx()
         metadata, response = self.dbxa.files_download(remote_file_path)
         return metadata, response
+
+
+class AsyncSimpleDropboxAPI(SimpleDropboxAPIV2):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    async def async_upload(self,
+                           local_file_path: str,
+                           remote_file_path: str) -> _FILEMETADATA_TYPE:
+        """
+        async upload
+        :param local_file_path:  local file path
+        :param remote_file_path: remote file path
+        :return:  metadata
+        """
+
+        async def _inner_upload():
+            return self.upload(local_file_path=local_file_path,
+                               remote_file_path=remote_file_path)
+
+        metadata = await _inner_upload()
+        return metadata
+
+    def aupload(self,
+                local_file_path: str,
+                remote_file_path: str) -> _FILEMETADATA_TYPE:
+        """
+        aupload
+        :param local_file_path:
+        :param remote_file_path:
+        :return:
+        """
+        if self.loop is None:
+            self.loop = asyncio.get_event_loop()
+        return self.loop.run_until_complete(self.async_upload(local_file_path, remote_file_path))
 
 
 class SimpleDropboxAPI(object):
