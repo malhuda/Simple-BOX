@@ -17,6 +17,8 @@ from urllib.parse import ParseResult, urlparse
 from py_fortify.constants import MIME_DICT
 from py_fortify.unity import is_blank
 
+FILE_DOT = "."
+
 
 # TODO
 
@@ -65,6 +67,10 @@ class FilePathParser(BaseParser):
         return os.path.isfile(self.full_path_file_string)
 
     @property
+    def is_not_file(self) -> bool:
+        return not self.is_file
+
+    @property
     def is_dir(self) -> bool:
         return os.path.isdir(self.full_path_file_string)
 
@@ -86,6 +92,10 @@ class FilePathParser(BaseParser):
     @property
     def source_name(self) -> Optional[str]:
         return self.basename
+
+    @property
+    def source_name_without_suffix(self) -> Optional[str]:
+        return self.source_name.replace(self.source_suffix, "").replace(FILE_DOT, "")
 
     @property
     def source_path(self) -> Optional[str]:

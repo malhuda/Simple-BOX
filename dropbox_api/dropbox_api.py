@@ -37,6 +37,9 @@ ACCESS_TOKEN = 'i8G-xobvWUQAAAAAAAABAAzg8_EbfSdZJIGzH93kXBoBGloa7jJuHEUJ167U34eC
 FILE_SEP = "/"
 FILE_DOT = "."
 
+DROPBOX_FILE_SEP = "/"
+DROPBOX_FILE_DOT = "."
+
 _FILEMETADATA_LIST_TYPE = List[FileMetadata]
 _FILEMETADATA_TYPE = FileMetadata
 _BOOLEAN_TYPE = bool
@@ -227,10 +230,42 @@ class SimpleDropboxAPIV2(SimpleAPI):
             raise DropboxAPIException("SimpleDropboxAPI#dbx dbx is None!")
         self.dbxa = dbx
 
+    def upload_bytes(self,
+                     file_bytes: bytes,
+                     remote_file_path: str, ) -> SimpleFileMetadata:
+        """
+        upload to dropbox from bytes
+        :param file_bytes:          file byte array
+        :param remote_file_path     remote file path        sample as "/DEFAULT/1.jpg
+        :return:
+        """
+        if file_bytes is None:
+            raise DropboxAPIException("SimpleDropboxAPI#upload_from_bytes , bytes is blank!")
+
+        if is_blank(remote_file_path):
+            raise DropboxAPIException("SimpleDropboxAPI#upload_from_bytes , remote file path is blank!")
+
+        if remote_file_path.endswith("/"):
+            raise DropboxAPIException("SimpleDropboxAPI#upload_from_bytes , remote file path not a file source !")
+
+        if logger.level == logging.DEBUG:
+            logger.debug("SimpleDropboxAPI#upload_from_bytes , remote_file_path=%s", remote_file_path)
+
+        if self.dbxa is None:
+            self.dbx()
+
+        md = self.dbxa.files_upload(file_bytes, remote_file_path, mute=True)
+        return SimpleFileMetadata(md)
+
     def upload(self,
                local_file_path: str,
-               remote_file_path: str, ) -> _FILEMETADATA_TYPE:
-
+               remote_file_path: str, ) -> SimpleFileMetadata:
+        """
+        upload
+        :param local_file_path:
+        :param remote_file_path:
+        :return:
+        """
         super(SimpleDropboxAPIV2, self).upload(local_file_path=local_file_path, remote_file_path=remote_file_path)
         if logger.level == logging.DEBUG:
             logger.debug("SimpleDropboxAPI#upload local_file_path=%s , remote_file_path=%s" % (
@@ -240,16 +275,17 @@ class SimpleDropboxAPIV2(SimpleAPI):
             self.dbx()
 
         with open_file(file_name=local_file_path, mode='rb') as lf:
-            metadata = self.dbxa.files_upload(lf.read(), remote_file_path, mute=True)
+            # sfmda = self.upload_bytes(lf.read(), remote_file_path)
+            sfmda = SimpleFileMetadata(self.dbxa.files_upload(lf.read(), remote_file_path, mute=True))
 
         if logger.level == logging.DEBUG:
-            logger.debug("SimpleDropboxAPI#upload metadata=%s" % metadata)
-        return metadata
+            logger.debug("SimpleDropboxAPI#upload metadata=%s" % sfmda)
+        return sfmda
 
     def upload_with_excepted_name(self,
                                   local_file_path: str,
                                   remote_file_path: str,
-                                  excepted_name: str = None) -> _FILEMETADATA_TYPE:
+                                  excepted_name: str = None) -> SimpleFileMetadata:
         """
         upload to dropbox
         :param local_file_path:  file path in local
@@ -258,58 +294,40 @@ class SimpleDropboxAPIV2(SimpleAPI):
         :return:
         """
 
-        # not exist file name, sample as `/foo/bar/`, in this case , `remote_file_path` will be set as
-        # `/foo/bar`+excepted_name
+        lfpp = FilePathParser(full_path_file_string=local_file_path)
+        if lfpp.is_blank:
+            raise DropboxAPIException("#upload_with_excepted_name, local file path is blank !")
 
-        # if `remote_file_path` is `/foo/bar` or `/foo/bar.txt` ,then `bar` or `bar.txt` will be excepted_name
-        if not remote_file_path.__contains__(FILE_DOT) and is_blank(remote_file_path.split(FILE_SEP)[-1]):
-            remote_file_path = os.path.join(remote_file_path, excepted_name)
+        if lfpp.is_not_exist:
+            raise DropboxAPIException("#upload_with_excepted_name, local file path is not exist !")
 
-        if logger.level == logging.DEBUG:
-            logger.debug("SimpleDropboxAPI#upload , remote_file_path is %s" % remote_file_path)
-
-        if self.dbxa is None:
-            self.dbx()
-
-        with open_file(file_name=local_file_path, mode='rb') as lf:
-            metadata = self.dbxa.files_upload(lf.read(), remote_file_path, mute=True)
-
-        if logger.level == logging.DEBUG:
-            logger.debug("SimpleDropboxAPI#upload metadata is %s" % metadata)
-        return metadata
-
-    def upload_from_bytes(self,
-                          file_bytes: bytes,
-                          remote_folder_path: str,
-                          excepted_name: str) -> SimpleFileMetadata:
-        """
-        upload to dropbox from bytes
-        :param file_bytes:          file byte array
-        :param remote_folder_path:  remote folder path
-        :param excepted_name:       excepted name
-        :return:
-        """
-        if file_bytes is None:
-            raise DropboxAPIException("SimpleDropboxAPI#upload_from_bytes , bytes is blank")
-
-        if remote_folder_path is None or remote_folder_path.strip("") == '':
-            raise DropboxAPIException("SimpleDropboxAPI#upload_from_bytes , remote file path is blank!")
-
-        rf_path, rf_name = separate_path_and_name(remote_folder_path)
-
-        if logger.level == logging.DEBUG:
-            logger.debug("SimpleDropboxAPI#upload_from_bytes , rf_path is %s , rf_name is %s", (rf_path, rf_name))
+        if lfpp.is_not_file:
+            raise DropboxAPIException("#upload_with_excepted_name, local file path is not a file !")
 
         if is_not_blank(excepted_name):
-            rf_name = excepted_name
+            remote_file_path = excepted_name
+        else:
+            remote_file_source = remote_file_path.split(DROPBOX_FILE_SEP)[-1]
+            # case one:
+            # remote_file_path  /DEFAULT/A/
+            # local_file_path   /foo/bar.jpg
+            # auto set          /DEFAULT/A/bar.jpg
+            if is_blank(remote_file_source):
+                remote_file_path = os.path.join(remote_file_path, lfpp.source_name)
+            # case two:
+            # remote_file_path  /DEFAULT/A/bar
+            # local_file_path   /foo/bar.jpg
+            # auto set          /DEFAULT/A/bar.jpg
+            if not remote_file_source.__contains__(DROPBOX_FILE_DOT) and is_not_blank(lfpp.source_suffix):
+                remote_file_path = remote_file_path + DROPBOX_FILE_DOT + lfpp.source_suffix
 
-        remote_folder_path = os.path.join(rf_path, rf_name)
+            # case three:
+            # remote_file_path  /DEFAULT/A/bar
+            # local_file_path   /foo/bar
+            # auto set          /DEFAULT/A/bar
 
-        if self.dbxa is None:
-            self.dbx()
+        return self.upload(local_file_path=local_file_path, remote_file_path=remote_file_path)
 
-        md = self.dbxa.files_upload(file_bytes, remote_folder_path, mute=True)
-        return SimpleFileMetadata(md)
 
     def upload_from_external(self, external_url: str, remote_folder_path: str, **kwargs) -> SimpleFileMetadata:
         """
@@ -449,7 +467,7 @@ class AsyncSimpleDropboxAPI(SimpleDropboxAPIV2):
 
     async def async_upload(self,
                            local_file_path: str,
-                           remote_file_path: str) -> _FILEMETADATA_TYPE:
+                           remote_file_path: str) -> SimpleFileMetadata:
         """
         async upload
         :param local_file_path:  local file path
@@ -466,7 +484,7 @@ class AsyncSimpleDropboxAPI(SimpleDropboxAPIV2):
 
     def aupload(self,
                 local_file_path: str,
-                remote_file_path: str) -> _FILEMETADATA_TYPE:
+                remote_file_path: str) -> SimpleFileMetadata:
         """
         aupload
         :param local_file_path:
