@@ -36,6 +36,10 @@ class BaseParser(object):
         return is_blank(self.full_path_file_string)
 
     @property
+    def is_not_blank(self) -> bool:
+        return not self.is_blank
+
+    @property
     def raw_string(self) -> str:
         return self.full_path_file_string
 
@@ -116,6 +120,19 @@ class FilePathParser(BaseParser):
     def source_path_and_name(self) -> Tuple[Optional[str], Optional[str]]:
         return self.source_path, self.source_name
 
+    def set_source_name(self, excepted_source_name) -> str:
+        """
+        Set source name which expected
+        sample as
+        a = FilePathParser(full_path_file_string = '/foo/bar.jpg')
+        b = a.set_source_name(excepted_source_name='cat.jpg')
+        # '/foo/cat.jpg'
+        :param excepted_source_name:
+        :return:
+        """
+        return os.path.join(self.source_path,
+                            excepted_source_name) if self.source_path is not None else excepted_source_name
+
     # ....
 
 
@@ -133,6 +150,10 @@ class UrlPathParser(BaseParser):
     def is_http(self) -> bool:
         return False if not self.full_path_file_string.startswith("http") and \
                         not self.full_path_file_string.startswith("https") else True
+
+    @property
+    def is_not_http(self) -> bool:
+        return not self.is_http
 
     @property
     def scheme(self) -> Optional[str]:
@@ -199,7 +220,7 @@ class UrlPathParser(BaseParser):
     def source_name_and_suffix(self) -> Optional[str]:
         if self.path is None:
             return None
-        return self.path.replace("/", "")
+        return self.path.split("/")[-1]
 
     @property
     def source_name(self) -> Optional[str]:
@@ -207,6 +228,8 @@ class UrlPathParser(BaseParser):
 
     @property
     def source_suffix(self) -> Optional[str]:
+        if not self.source_name_and_suffix.__contains__(FILE_DOT):
+            return None
         return None if is_blank(self.source_name_and_suffix) else self.source_name_and_suffix.split(".")[-1]
 
     @property

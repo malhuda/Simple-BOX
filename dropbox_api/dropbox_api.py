@@ -22,7 +22,7 @@ from werkzeug.utils import secure_filename
 from dropbox.files import FileMetadata, ListFolderResult
 
 from typing import List, Optional
-from py_fortify import is_not_blank, is_blank, open_file, FilePathParser, UrlPathParser
+from py_fortify import is_not_blank, is_blank, open_file, FilePathParser, UrlPathParser, get_suffix
 from py_fortify.parser import BaseParser
 
 level = logging.DEBUG
@@ -54,6 +54,10 @@ try:
     assert sys.version_info.minor > 5
 except Exception as ex:
     raise AssertionError("dropbox-api only support 3.6+.")
+
+
+def is_debug():
+    return logger.level == logging.DEBUG
 
 
 # ......
@@ -267,7 +271,7 @@ class SimpleDropboxAPIV2(SimpleAPI):
         :return:
         """
         super(SimpleDropboxAPIV2, self).upload(local_file_path=local_file_path, remote_file_path=remote_file_path)
-        if logger.level == logging.DEBUG:
+        if is_debug():
             logger.debug("SimpleDropboxAPI#upload local_file_path=%s , remote_file_path=%s" % (
                 local_file_path, remote_file_path))
 
@@ -278,7 +282,7 @@ class SimpleDropboxAPIV2(SimpleAPI):
             # sfmda = self.upload_bytes(lf.read(), remote_file_path)
             sfmda = SimpleFileMetadata(self.dbxa.files_upload(lf.read(), remote_file_path, mute=True))
 
-        if logger.level == logging.DEBUG:
+        if is_debug():
             logger.debug("SimpleDropboxAPI#upload metadata=%s" % sfmda)
         return sfmda
 
@@ -294,7 +298,11 @@ class SimpleDropboxAPIV2(SimpleAPI):
         :return:
         """
 
+        if is_blank(remote_file_path):
+            raise DropboxAPIException("upload_with_excepted_name , remote_file_path is blank !")
+
         lfpp = FilePathParser(full_path_file_string=local_file_path)
+
         if lfpp.is_blank:
             raise DropboxAPIException("#upload_with_excepted_name, local file path is blank !")
 
@@ -318,7 +326,7 @@ class SimpleDropboxAPIV2(SimpleAPI):
             # remote_file_path  /DEFAULT/A/bar
             # local_file_path   /foo/bar.jpg
             # auto set          /DEFAULT/A/bar.jpg
-            if not remote_file_source.__contains__(DROPBOX_FILE_DOT) and is_not_blank(lfpp.source_suffix):
+            elif not remote_file_source.__contains__(DROPBOX_FILE_DOT) and is_not_blank(lfpp.source_suffix):
                 remote_file_path = remote_file_path + DROPBOX_FILE_DOT + lfpp.source_suffix
 
             # case three:
@@ -328,42 +336,62 @@ class SimpleDropboxAPIV2(SimpleAPI):
 
         return self.upload(local_file_path=local_file_path, remote_file_path=remote_file_path)
 
-
-    def upload_from_external(self, external_url: str, remote_folder_path: str, **kwargs) -> SimpleFileMetadata:
+    def upload_from_external_url(self,
+                                 external_url: str,
+                                 remote_folder_path: str,
+                                 excepted_name: str = None,
+                                 **kwargs) -> SimpleFileMetadata:
         """
         upload file which from external url
-        :param external_url:        url from external source
-        :param remote_folder_path:  dropbox folder path
-        :param kwargs:
+        :param external_url:        url from external source         sample as "https://foo.jpg
+        :param remote_folder_path   remote folder_path               sample as "/DEFAULT/A/"
+        :param excepted_name        just only excepted name , not with dir path
+               sample as "cat.jpg"
+        :param kwargs:              requests parameters
         :return:
         """
         if is_blank(remote_folder_path):
-            raise DropboxAPIException("upload remote file path is None!")
-        if is_blank(external_url):
-            raise DropboxAPIException("upload external url is None!")
-        if not external_url.startswith("http"):
-            raise DropboxAPIException("upload external url is unknown protocol!")
+            raise DropboxAPIException("#upload_from_external ,upload remote folder path is blank!")
 
-        timeout = kwargs.get("custom_timeout") or 10
-        rf_path, rf_name = separate_path_and_name(remote_folder_path)
-        excepted_name = kwargs.get("excepted_name")
-        if excepted_name is not None and not excepted_name.strip("") == '':
-            rf_name = excepted_name
+        # set as /remote_folder_path/
+        if not remote_folder_path.startswith(DROPBOX_FILE_SEP):
+            remote_folder_path = DROPBOX_FILE_SEP + remote_folder_path
+        if not remote_folder_path.endswith(DROPBOX_FILE_SEP):
+            remote_folder_path = remote_folder_path + DROPBOX_FILE_SEP
+
+        euup = UrlPathParser(full_path_file_string=external_url)
+
+        if euup.is_blank:
+            raise DropboxAPIException("#upload_from_external , upload external url is blank!")
+        if euup.is_not_http:
+            raise DropboxAPIException("#upload_from_external , upload external url is unknown protocol!")
+
+        if is_not_blank(excepted_name):
+            remote_file_path = remote_folder_path + excepted_name
+
         else:
-            if rf_name is None or rf_name.strip('') == '':
-                rf_name = fetch_filename_from_url(external_url)
+            remote_file_path = remote_folder_path + euup.source_name_and_suffix
 
-        if rf_name is None or rf_name.strip('') == '':
-            raise DropboxAPIException("upload from external unknown name which is upload")
-        remote_folder_path = os.path.join(rf_path, rf_name)
+        if is_debug():
+            logger.debug(
+                "#upload_from_external_url , remote_file_path=%s, external_url=%s" % (remote_file_path, external_url))
 
-        if kwargs.get('custom_headers') is not None:
-            custom_headers = kwargs.get('custom_headers')
-            res = requests.get(url=external_url, headers=custom_headers, timeout=timeout, stream=True)
-        else:
-            res = requests.get(url=external_url, timeout=timeout, stream=True)
+        async def __inner_request():
+            async def arequest_external_url():
+                return requests.get(url=external_url, **kwargs, stream=True)
+
+            _res = await arequest_external_url()
+            return _res
+
+        res = self.loop.run_until_complete(__inner_request())
+        # Tips: Anti spider policy , 可以把status code 设置非200来迷惑爬虫
         if res.status_code != 200:
-            raise DropboxAPIException("upload from external request failed! raw response is %s" % res.text)
+            error_msg = "#upload_from_external_url , fail to request ,  url=%s , msg=%s", (external_url, res.txt)
+            logger.error(error_msg)
+            raise DropboxAPIException(message=error_msg)
+        # request success
+        content_type = res.headers.get("Content-Type")
+
         buffer = io.BytesIO()
         for chunk in res.iter_content(chunk_size=20):
             if chunk:
@@ -371,11 +399,22 @@ class SimpleDropboxAPIV2(SimpleAPI):
             else:
                 break
 
-        if logger.level == logging.DEBUG:
-            logger.info("upload from external request <%s> success!" % external_url)
+        if is_debug():
+            logger.info("#upload_from_external_url request <%s> success!" % external_url)
+
+        if DROPBOX_FILE_DOT not in remote_file_path.split(DROPBOX_FILE_SEP)[-1]:
+            # get file type (suffix)
+            file_suffix = get_suffix(mime=content_type)
+            if file_suffix is not None:
+                remote_file_path = remote_file_path + DROPBOX_FILE_DOT + file_suffix
+
+        if is_debug():
+            logger.debug("#upload_from_external_url , remote_file_path=%s" % remote_file_path)
+
         if self.dbxa is None:
             self.dbx()
-        md = self.dbxa.files_upload(buffer.getvalue(), remote_folder_path, mute=True)
+
+        md = self.dbxa.files_upload(buffer.getvalue(), remote_file_path, mute=True)
         if not buffer.closed:
             buffer.close()
         return SimpleFileMetadata(md)

@@ -33,6 +33,10 @@ class TestParser(unittest.TestCase):
     def test_urlparser(self):
         url = 'https://foo.com/bar.jpg?parms1=1&params2=2#fake'
         u = UrlPathParser(full_path_file_string=url)
+
+        url = 'https://desolate-ravine-49980.herokuapp.com/static/de'
+        u = UrlPathParser(full_path_file_string=url)
+        assert u.source_name_and_suffix == 'de'
         print(u)
 
     def test_ospath(self):
