@@ -10,18 +10,18 @@
 from __future__ import print_function
 
 import asyncio
+import io
 import logging
 import os
+import sys
+from typing import List, Optional
+
 import dropbox
 import requests
-import io
-
-import sys
-from flask import Flask, flash, request, redirect, url_for, render_template
-from werkzeug.utils import secure_filename
 from dropbox.files import FileMetadata, ListFolderResult
+from flask import flash, request, redirect, render_template
+from werkzeug.utils import secure_filename
 
-from typing import List, Optional
 from py_fortify import is_not_blank, is_blank, open_file, FilePathParser, UrlPathParser, get_suffix
 from py_fortify.parser import BaseParser
 
@@ -174,6 +174,9 @@ class SimpleFileMetadata(object):
         return {'id': self.id, 'name': self.name, 'path': self.path, 'time': self.time, 'type': self.type,
                 'hash': self.__hash__()}
 
+    def __repr__(self):
+        return str(self.to_dict())
+
 
 class SimpleAPI(object):
     __slots__ = ['option_map', 'loop', ]
@@ -299,78 +302,42 @@ class SimpleDropboxAPIV2(SimpleAPI):
             logger.debug("SimpleDropboxAPI#upload metadata=%s" % sfmda)
         return sfmda
 
-    def upload_with_excepted_name(self,
-                                  local_file_path: str,
-                                  remote_file_path: str,
-                                  excepted_name: str = None) -> SimpleFileMetadata:
-        """
-        upload to dropbox with excepted name
-        :param local_file_path:  file path in local
-        :param remote_file_path: file path in dropbox
-        :param excepted_name:   excepted name which want to rename
-        :return:
-        """
-
-        if is_blank(remote_file_path):
-            raise DropboxAPIException("#upload_with_excepted_name, remote_file_path is blank !")
-
-        lfpp = FilePathParser(full_path_file_string=local_file_path)
-
-        if lfpp.is_blank:
-            raise DropboxAPIException("#upload_with_excepted_name, local file path is blank !")
-
-        if lfpp.is_not_exist:
-            raise DropboxAPIException("#upload_with_excepted_name, local file path is not exist !")
-
-        if lfpp.is_not_file:
-            raise DropboxAPIException("#upload_with_excepted_name, local file path is not a file !")
-
-        if is_not_blank(excepted_name):
-            remote_file_path = excepted_name
-        else:
-            remote_file_source = remote_file_path.split(DROPBOX_FILE_SEP)[-1]
-            # case one:
-            # remote_file_path  /DEFAULT/A/
-            # local_file_path   /foo/bar.jpg
-            # auto set          /DEFAULT/A/bar.jpg
-            if is_blank(remote_file_source):
-                remote_file_path = os.path.join(remote_file_path, lfpp.source_name)
-            # case two:
-            # remote_file_path  /DEFAULT/A/bar
-            # local_file_path   /foo/bar.jpg
-            # auto set          /DEFAULT/A/bar.jpg
-            elif not remote_file_source.__contains__(DROPBOX_FILE_DOT) and is_not_blank(lfpp.source_suffix):
-                remote_file_path = remote_file_path + DROPBOX_FILE_DOT + lfpp.source_suffix
-
-            # case three:
-            # remote_file_path  /DEFAULT/A/bar
-            # local_file_path   /foo/bar
-            # auto set          /DEFAULT/A/bar
-
-        return self.upload(local_file_path=local_file_path, remote_file_path=remote_file_path)
-
     def upload_from_external_url(self,
                                  external_url: str,
-                                 remote_folder_path: str,
+                                 remote_file_path: str = None,
+                                 remote_folder_path: str = None,
                                  excepted_name: str = None,
                                  **kwargs) -> SimpleFileMetadata:
         """
         upload file which from external url
-        :param external_url:        url from external source         sample as "https://foo.jpg
-        :param remote_folder_path   remote folder_path               sample as "/DEFAULT/A/"
+
+        in case of all parameters is not none
+
+        `excepted_name`       first priority
+        `remote_file_path`    second priority
+        `remote_folder`       third priority
+
+        :param external_url:        url from external source
+        :param remote_file_path     remote file path
+        :param remote_folder_path   remote folder_path
         :param excepted_name        just only excepted name , not with dir path
-               sample as "cat.jpg"
         :param kwargs:              requests parameters
         :return:
         """
-        if is_blank(remote_folder_path):
-            raise DropboxAPIException("#upload_from_external ,upload remote folder path is blank!")
+        if is_blank(remote_file_path):
+            if is_blank(remote_folder_path):
+                raise DropboxAPIException(
+                    "#upload_from_external_url, remote_file_path is blank and remote_folder_path "
+                    "is also blank !")
 
-        # set as /remote_folder_path/
-        if not remote_folder_path.startswith(DROPBOX_FILE_SEP):
-            remote_folder_path = DROPBOX_FILE_SEP + remote_folder_path
-        if not remote_folder_path.endswith(DROPBOX_FILE_SEP):
-            remote_folder_path = remote_folder_path + DROPBOX_FILE_SEP
+            if not remote_folder_path.startswith(DROPBOX_FILE_SEP):
+                remote_folder_path = DROPBOX_FILE_SEP + remote_folder_path
+            if not remote_folder_path.endswith(DROPBOX_FILE_SEP):
+                remote_folder_path = remote_folder_path + DROPBOX_FILE_SEP
+            remote_file_path = remote_folder_path
+
+        if not remote_file_path.startswith(DROPBOX_FILE_SEP):
+            remote_file_path = DROPBOX_FILE_SEP + remote_file_path
 
         euup = UrlPathParser(full_path_file_string=external_url)
 
@@ -379,11 +346,36 @@ class SimpleDropboxAPIV2(SimpleAPI):
         if euup.is_not_http:
             raise DropboxAPIException("#upload_from_external , upload external url is unknown protocol!")
 
+        rfpp = FilePathParser(full_path_file_string=remote_file_path)
+
         if is_not_blank(excepted_name):
-            remote_file_path = remote_folder_path + excepted_name
+            # TODO
+            if DROPBOX_FILE_SEP in excepted_name:
+                excepted_name = DROPBOX_FILE_SEP + excepted_name \
+                    if not excepted_name.startswith(DROPBOX_FILE_SEP) else excepted_name
+                remote_file_path = excepted_name
+            else:
+                remote_file_path = rfpp.set_source_name(excepted_name.split(DROPBOX_FILE_SEP)[-1])
 
         else:
-            remote_file_path = remote_folder_path + euup.source_name_and_suffix
+            remote_file_source = rfpp.source_name
+            # case one:
+            # remote_file_path  /DEFAULT/A/
+            # local_file_path   /foo/bar.jpg
+            # auto set          /DEFAULT/A/bar.jpg
+            if is_blank(remote_file_source):
+                remote_file_path = os.path.join(remote_file_path, euup.source_name)
+            # case two:
+            # remote_file_path  /DEFAULT/A/bar
+            # local_file_path   /foo/bar.jpg
+            # auto set          /DEFAULT/A/bar.jpg
+            elif not remote_file_source.__contains__(DROPBOX_FILE_DOT) and is_not_blank(euup.source_suffix):
+                remote_file_path = remote_file_path + DROPBOX_FILE_DOT + euup.source_suffix
+
+            # case three:
+            # remote_file_path  /DEFAULT/A/bar
+            # local_file_path   /foo/bar
+            # auto set          /DEFAULT/A/bar
 
         if is_debug():
             logger.debug(
@@ -406,7 +398,7 @@ class SimpleDropboxAPIV2(SimpleAPI):
         content_type = res.headers.get("Content-Type")
 
         buffer = io.BytesIO()
-        for chunk in res.iter_content(chunk_size=20):
+        for chunk in res.iter_content(chunk_size=20*1024):
             if chunk:
                 buffer.write(chunk)
             else:
@@ -428,6 +420,85 @@ class SimpleDropboxAPIV2(SimpleAPI):
         if not buffer.closed:
             buffer.close()
         return md
+
+    def upload_from_local(self,
+                          local_file_path: str,
+                          remote_file_path: str = None,
+                          remote_folder_path: str = None,
+                          excepted_name: str = None) -> SimpleFileMetadata:
+        """
+        upload to dropbox with excepted name
+
+        in case of all parameters is not none
+
+        `excepted_name`       first priority
+        `remote_file_path`    second priority
+        `remote_folder`       third priority
+
+        :param local_file_path:             file path in local
+        :param remote_file_path:            file path in dropbox
+        :param remote_folder_path                folder in dropbox
+        :param excepted_name:               excepted name which want to rename
+        :return:
+        """
+
+        if is_blank(remote_file_path):
+            if is_blank(remote_folder_path):
+                raise DropboxAPIException(
+                    "#upload_with_excepted_name, remote_file_path is blank and remote_folder_path "
+                    "is also blank !")
+
+            if not remote_folder_path.startswith(DROPBOX_FILE_SEP):
+                remote_folder_path = DROPBOX_FILE_SEP + remote_folder_path
+            if not remote_folder_path.endswith(DROPBOX_FILE_SEP):
+                remote_folder_path = remote_folder_path + DROPBOX_FILE_SEP
+            remote_file_path = remote_folder_path
+
+        if not remote_file_path.startswith(DROPBOX_FILE_SEP):
+            remote_file_path = DROPBOX_FILE_SEP + remote_file_path
+
+        lfpp = FilePathParser(full_path_file_string=local_file_path)
+
+        if lfpp.is_blank:
+            raise DropboxAPIException("#upload_with_excepted_name, local file path is blank !")
+
+        if lfpp.is_not_exist:
+            raise DropboxAPIException("#upload_with_excepted_name, local file path is not exist !")
+
+        if lfpp.is_not_file:
+            raise DropboxAPIException("#upload_with_excepted_name, local file path is not a file !")
+
+        rfpp = FilePathParser(full_path_file_string=remote_file_path)
+        if is_not_blank(excepted_name):
+            # TODO
+            if DROPBOX_FILE_SEP in excepted_name:
+                excepted_name = DROPBOX_FILE_SEP + excepted_name \
+                    if not excepted_name.startswith(DROPBOX_FILE_SEP) else excepted_name
+                remote_file_path = excepted_name
+            else:
+                remote_file_path = rfpp.set_source_name(excepted_name.split(DROPBOX_FILE_SEP)[-1])
+
+        else:
+            remote_file_source = rfpp.source_name
+            # case one:
+            # remote_file_path  /DEFAULT/A/
+            # local_file_path   /foo/bar.jpg
+            # auto set          /DEFAULT/A/bar.jpg
+            if is_blank(remote_file_source):
+                remote_file_path = os.path.join(remote_file_path, lfpp.source_name)
+            # case two:
+            # remote_file_path  /DEFAULT/A/bar
+            # local_file_path   /foo/bar.jpg
+            # auto set          /DEFAULT/A/bar.jpg
+            elif not remote_file_source.__contains__(DROPBOX_FILE_DOT) and is_not_blank(lfpp.source_suffix):
+                remote_file_path = remote_file_path + DROPBOX_FILE_DOT + lfpp.source_suffix
+
+            # case three:
+            # remote_file_path  /DEFAULT/A/bar
+            # local_file_path   /foo/bar
+            # auto set          /DEFAULT/A/bar
+
+        return self.upload(local_file_path=local_file_path, remote_file_path=remote_file_path)
 
     def download(self,
                  local_file_path: str,
