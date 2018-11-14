@@ -14,7 +14,7 @@ import io
 import logging
 import os
 import sys
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import dropbox
 import requests
@@ -398,7 +398,7 @@ class SimpleDropboxAPIV2(SimpleAPI):
         content_type = res.headers.get("Content-Type")
 
         buffer = io.BytesIO()
-        for chunk in res.iter_content(chunk_size=20*1024):
+        for chunk in res.iter_content(chunk_size=20 * 1024):
             if chunk:
                 buffer.write(chunk)
             else:
@@ -499,6 +499,95 @@ class SimpleDropboxAPIV2(SimpleAPI):
             # auto set          /DEFAULT/A/bar
 
         return self.upload(local_file_path=local_file_path, remote_file_path=remote_file_path)
+
+    def download_from_dropbox(self,
+                              remote_file_path: str) -> Tuple[_FILEMETADATA_TYPE, bytes]:
+        """
+        downlaod from dropbox
+        :param remote_file_path:
+        :return:
+        """
+        if is_blank(remote_file_path):
+            raise DropboxAPIException(message="#download_for_bytes , remote file path is blank !")
+        rfpp = FilePathParser(full_path_file_string=remote_file_path)
+        if not rfpp.source_path.startswith(DROPBOX_FILE_SEP):
+            raise DropboxAPIException(message="#download_from_dropbox , remote file path format error!")
+        if rfpp.source_name.endswith(DROPBOX_FILE_SEP):
+            raise DropboxAPIException(message="#download_from_dropbox , source file name format error !")
+
+        if self.dbxa is None:
+            self.dbx()
+        return self.dbxa.files_download(remote_file_path)
+
+    def async_download_from_dropbox(self,
+                                    remote_file_path: str) -> Tuple[_FILEMETADATA_TYPE, bytes]:
+        """
+        async download from dropbox
+        :param remote_file_path:
+        :return:
+        """
+
+        async def _download_from_dropbox():
+            async def _inner_download():
+                return self.download_from_dropbox(remote_file_path=remote_file_path)
+
+            return await _inner_download()
+
+        return self.loop.run_until_complete(_download_from_dropbox())
+
+    def download_as_bytes(self, remote_file_path: str) -> bytes:
+        """
+        download as bytes
+        :param remote_file_path:
+        :return:
+        """
+        assert is_not_blank(remote_file_path)
+        _, file_bytes = self.async_download_from_dropbox(remote_file_path=remote_file_path)
+        return file_bytes
+
+    def download_as_file(self,
+                         remote_file_path: str,
+                         local_file_path: str,
+                         excepted_name: str) -> SimpleFileMetadata:
+        """
+        download as file
+        :param remote_file_path:
+        :param local_file_path:
+        :param excepted_name: excepted name
+        :return:
+        """
+        if is_blank(remote_file_path):
+            raise DropboxAPIException(message="#download_as_file, remote file is blank !")
+        if remote_file_path.endswith(DROPBOX_FILE_SEP):
+            raise DropboxAPIException(message="#download_as_file, remote file path format error !")
+
+        remote_file_path = remote_file_path if remote_file_path.startswith(
+            DROPBOX_FILE_SEP) else DROPBOX_FILE_SEP + remote_file_path
+
+        rfpp = FilePathParser(full_path_file_string=remote_file_path)
+        lfpp = FilePathParser(full_path_file_string=local_file_path)
+
+        if lfpp.is_blank:
+            raise DropboxAPIException(message="#download_as_file , local file path is blank !")
+
+        # TODO
+        pass
+
+    def list_from_dropbox(self, remote_folder_path: str) -> ListFolderResult:
+        if is_blank(remote_folder_path):
+            raise DropboxAPIException(message="#list_from_dropbox , remote folder path is blank !")
+        if self.dbxa is None:
+            self.dbx()
+        return self.dbxa.files_list_folder(remote_folder_path)
+
+    def async_list(self, remote_folder_path: str) -> ListFolderResult:
+        async def _async_list():
+            async def _inner_list():
+                return self.list_from_dropbox(remote_folder_path=remote_folder_path)
+
+            return await _inner_list()
+
+        return self.loop.run_until_complete(_async_list())
 
     def download(self,
                  local_file_path: str,
