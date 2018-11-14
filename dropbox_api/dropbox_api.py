@@ -486,6 +486,7 @@ class SimpleDropboxAPIV2(SimpleAPI):
             # auto set          /DEFAULT/A/bar.jpg
             if is_blank(remote_file_source):
                 remote_file_path = os.path.join(remote_file_path, lfpp.source_name)
+
             # case two:
             # remote_file_path  /DEFAULT/A/bar
             # local_file_path   /foo/bar.jpg
