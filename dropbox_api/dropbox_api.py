@@ -397,13 +397,6 @@ class SimpleDropboxAPIV2(SimpleAPI):
         # request success
         content_type = res.headers.get("Content-Type")
 
-        buffer = io.BytesIO()
-        for chunk in res.iter_content(chunk_size=20 * 1024):
-            if chunk:
-                buffer.write(chunk)
-            else:
-                break
-
         if is_debug():
             logger.info("#upload_from_external_url request <%s> success!" % external_url)
 
@@ -412,6 +405,13 @@ class SimpleDropboxAPIV2(SimpleAPI):
             file_suffix = get_suffix(mime=content_type)
             if file_suffix is not None:
                 remote_file_path = remote_file_path + DROPBOX_FILE_DOT + file_suffix
+
+        buffer = io.BytesIO()
+        for chunk in res.iter_content(chunk_size=20 * 1024):
+            if chunk:
+                buffer.write(chunk)
+            else:
+                break
 
         if is_debug():
             logger.debug("#upload_from_external_url , remote_file_path=%s" % remote_file_path)
@@ -552,9 +552,9 @@ class SimpleDropboxAPIV2(SimpleAPI):
                          excepted_name: str) -> SimpleFileMetadata:
         """
         download as file
-        :param remote_file_path:
-        :param local_file_path:
-        :param excepted_name: excepted name
+        :param remote_file_path:                remote file path and just support single file
+        :param local_file_path:                 local file path which download
+        :param excepted_name: excepted name     just excepted name which want to rename
         :return:
         """
         if is_blank(remote_file_path):
@@ -568,11 +568,30 @@ class SimpleDropboxAPIV2(SimpleAPI):
         rfpp = FilePathParser(full_path_file_string=remote_file_path)
         lfpp = FilePathParser(full_path_file_string=local_file_path)
 
+        if is_not_blank(rfpp.source_name):
+            raise DropboxAPIException(message="#download_as_file ,remote file path source name is blank !")
+
         if lfpp.is_blank:
             raise DropboxAPIException(message="#download_as_file , local file path is blank !")
-        if is_blank(lfpp.source_name)
 
-        # TODO
+        if is_blank(lfpp.source_name):
+            raise DropboxAPIException(message="#download_as_file , local file path source name is blank !")
+
+        # rename local file path
+        if is_not_blank(excepted_name):
+            efpp = FilePathParser(full_path_file_string=excepted_name)
+            if is_not_blank(efpp.source_name):
+                local_file_path = lfpp.set_source_name(excepted_source_name=excepted_name)
+
+        buffer = io.StringIO()
+
+        buffer.write(self.download_as_bytes(remote_file_path=remote_file_path))
+
+        with open_file(file_name=local_file_path,mode="wb") as fw:
+            fw.write(buffer.getvalue())
+
+        if not buffer.closed():
+            buffer.close()
         pass
 
     def list_from_dropbox(self, remote_folder_path: str) -> ListFolderResult:
@@ -671,10 +690,6 @@ class SimpleDropboxAPIV2(SimpleAPI):
         metadata, response = self.dbxa.files_download(remote_file_path)
         return metadata, response
 
-
-class AsyncSimpleDropboxAPI(SimpleDropboxAPIV2):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
 
 
 class SimpleDropboxAPI(object):
