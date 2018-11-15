@@ -570,6 +570,7 @@ class SimpleDropboxAPIV2(SimpleAPI):
 
         if lfpp.is_blank:
             raise DropboxAPIException(message="#download_as_file , local file path is blank !")
+        if is_blank(lfpp.source_name)
 
         # TODO
         pass
