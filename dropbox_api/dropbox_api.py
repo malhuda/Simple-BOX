@@ -8,7 +8,6 @@
  Time: 10/4/18
 """
 from __future__ import print_function
-
 import asyncio
 import io
 import logging
@@ -232,6 +231,10 @@ class SimpleDropboxAPIV2(SimpleAPI):
         self.dbxa = None
 
     def dbx(self) -> None:
+        # dropbox.create_session(proxies={
+        #     'http': 'socks5://127.0.0.1:1081',
+        #     'https': 'socks5://127.0.0.1:1081'
+        # })
         dbx = dropbox.Dropbox(self.access_token)
         if dbx is None:
             raise DropboxAPIException("SimpleDropboxAPI#dbx dbx is None!")
@@ -260,7 +263,6 @@ class SimpleDropboxAPIV2(SimpleAPI):
 
         if self.dbxa is None:
             self.dbx()
-
         return self.dbxa.files_upload(file_bytes, remote_file_path, mute=True)
 
     def async_upload_bytes(self,
@@ -583,16 +585,16 @@ class SimpleDropboxAPIV2(SimpleAPI):
             if is_not_blank(efpp.source_name):
                 local_file_path = lfpp.set_source_name(excepted_source_name=excepted_name)
 
+        md , b = self.async_download_from_dropbox(remote_file_path=remote_file_path)
         buffer = io.StringIO()
-
-        buffer.write(self.download_as_bytes(remote_file_path=remote_file_path))
+        buffer.write(b)
 
         with open_file(file_name=local_file_path,mode="wb") as fw:
             fw.write(buffer.getvalue())
 
         if not buffer.closed():
             buffer.close()
-        pass
+        return md
 
     def list_from_dropbox(self, remote_folder_path: str) -> ListFolderResult:
         if is_blank(remote_folder_path):

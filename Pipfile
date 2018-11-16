@@ -1,10 +1,13 @@
 [[source]]
+
 url = "https://pypi.org/simple"
 verify_ssl = true
 name = "pypi"
 
+
 [packages]
-requests = "*"
+
+requests = {extras = ["socks"]}
 flask = "*"
 google-api-python-client = "*"
 "oauth2client" = "*"
@@ -13,7 +16,11 @@ dropbox = "*"
 gunicorn = "*"
 pytest = "*"
 
+
 [dev-packages]
 
+
+
 [requires]
+
 python_version = "3.6"
