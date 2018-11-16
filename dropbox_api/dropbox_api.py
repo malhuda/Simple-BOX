@@ -439,7 +439,7 @@ class SimpleDropboxAPIV2(SimpleAPI):
 
         :param local_file_path:             file path in local
         :param remote_file_path:            file path in dropbox
-        :param remote_folder_path                folder in dropbox
+        :param remote_folder_path           folder in dropbox
         :param excepted_name:               excepted name which want to rename
         :return:
         """
@@ -504,11 +504,11 @@ class SimpleDropboxAPIV2(SimpleAPI):
         return self.upload(local_file_path=local_file_path, remote_file_path=remote_file_path)
 
     def download_from_dropbox(self,
-                              remote_file_path: str) -> Tuple[_FILEMETADATA_TYPE, bytes]:
+                              remote_file_path: str) -> Tuple[SimpleFileMetadata, bytes]:
         """
-        downlaod from dropbox
-        :param remote_file_path:
-        :return:
+        download from dropbox
+        :param remote_file_path:        remote file path in dropbox
+        :return:                        Tuple[SimpleFileMetadata, bytes]
         """
         if is_blank(remote_file_path):
             raise DropboxAPIException(message="#download_for_bytes , remote file path is blank !")
@@ -520,14 +520,16 @@ class SimpleDropboxAPIV2(SimpleAPI):
 
         if self.dbxa is None:
             self.dbx()
-        return self.dbxa.files_download(remote_file_path)
+
+        metadata, bytes_array = self.dbxa.files_download(remote_file_path)
+        return SimpleFileMetadata(metadata), bytes_array
 
     def async_download_from_dropbox(self,
-                                    remote_file_path: str) -> Tuple[_FILEMETADATA_TYPE, bytes]:
+                                    remote_file_path: str) -> Tuple[SimpleFileMetadata, bytes]:
         """
         async download from dropbox
-        :param remote_file_path:
-        :return:
+        :param remote_file_path:        remote file path in dropbox
+        :return:                        Tuple[SimpleFileMetadata, bytes]
         """
 
         async def _download_from_dropbox():
@@ -541,8 +543,9 @@ class SimpleDropboxAPIV2(SimpleAPI):
     def download_as_bytes(self, remote_file_path: str) -> bytes:
         """
         download as bytes
-        :param remote_file_path:
-        :return:
+        remote file path is not blank
+        :param remote_file_path:        remote file path in dropbox
+        :return:                        byte array
         """
         assert is_not_blank(remote_file_path)
         _, file_bytes = self.async_download_from_dropbox(remote_file_path=remote_file_path)
@@ -551,9 +554,28 @@ class SimpleDropboxAPIV2(SimpleAPI):
     def download_as_file(self,
                          remote_file_path: str,
                          local_file_path: str,
-                         excepted_name: str) -> SimpleFileMetadata:
+                         excepted_name: str,
+                         suffix:str) -> SimpleFileMetadata:
         """
-        download as file
+        download as local file
+        # if `remote_file_path` not start with `/` , and combine `/` to head;
+        # sample as  `foo/bar.jpg` to `/foo/bar.jpg`
+
+        # if source name not in remote file path , throw `DropboxAPIException`
+        # if source name not in local file path ,  first fetch excepted name , second fetch local source name
+        # sample as
+            remote_file_path = "/foo/bar.jpg"       local_path_path="/local/    => "/local/bar.jpg"
+
+        # if excepted name exist , replace source name to excepted name.
+        # sample as
+            excepted_name = "cat.jpg" ,         local_path_file = "/local/bar.jpg" => "/local/cat.jpg"
+            excepted_name = "/animal/cat.jpg" , local_path_file = "/local/bar.jpg" => "/local/cat.jpg"
+
+        usage:
+            >>> self.download_as_file(remote_file_path="foo/bar.jpg",local_file_path="/local/bar.jpg",excepted_name="cat.jpg")
+            >>> self.download_as_file(remote_file_path="/foo/bar.jpg",local_file_path="/local/bar.jpg",excepted_name="cat.jpg")
+            >>> self.download_as_file(remote_file_path="/foo/bar.jpg",local_file_path="/local/bar.jpg",excepted_name="cat.jpg")
+
         :param remote_file_path:                remote file path and just support single file
         :param local_file_path:                 local file path which download
         :param excepted_name: excepted name     just excepted name which want to rename
@@ -561,40 +583,62 @@ class SimpleDropboxAPIV2(SimpleAPI):
         """
         if is_blank(remote_file_path):
             raise DropboxAPIException(message="#download_as_file, remote file is blank !")
+
         if remote_file_path.endswith(DROPBOX_FILE_SEP):
             raise DropboxAPIException(message="#download_as_file, remote file path format error !")
 
+        # if `remote_file_path` not start with `/` , and combine `/` to head;
+        # transform `foo/bar.jpg` to `/foo/bar.jpg`
         remote_file_path = remote_file_path if remote_file_path.startswith(
             DROPBOX_FILE_SEP) else DROPBOX_FILE_SEP + remote_file_path
 
         rfpp = FilePathParser(full_path_file_string=remote_file_path)
         lfpp = FilePathParser(full_path_file_string=local_file_path)
 
+        # if source name not in remote file path , throw `DropboxAPIException`
         if is_not_blank(rfpp.source_name):
-            raise DropboxAPIException(message="#download_as_file ,remote file path source name is blank !")
+            raise DropboxAPIException(message="#download_as_file , remote file path source name is blank !")
 
         if lfpp.is_blank:
             raise DropboxAPIException(message="#download_as_file , local file path is blank !")
 
-        if is_blank(lfpp.source_name):
-            raise DropboxAPIException(message="#download_as_file , local file path source name is blank !")
+        # if source name not in local file path , throw `DropboxAPIException`
+        # if is_blank(lfpp.source_name):
+        #     raise DropboxAPIException(message="#download_as_file , local file path source name is blank !")
 
-        # rename local file path
+        # rename local file path . if excepted name exist , replace source name to excepted name.
+        #  excepted_name = "cat.jpg" , local_path_file = "/foo/bar.jgp" => "foo/cat.jpg"
         if is_not_blank(excepted_name):
             efpp = FilePathParser(full_path_file_string=excepted_name)
             if is_not_blank(efpp.source_name):
                 local_file_path = lfpp.set_source_name(excepted_source_name=excepted_name)
+        elif is_blank(lfpp.source_name):
+            local_file_path = lfpp.set_source_name(excepted_source_name=rfpp.source_name)
 
-        md , b = self.async_download_from_dropbox(remote_file_path=remote_file_path)
+        simple_file_metadata, bytes_array = self.async_download_from_dropbox(remote_file_path=remote_file_path)
         buffer = io.StringIO()
-        buffer.write(b)
+        buffer.write(bytes_array)
 
-        with open_file(file_name=local_file_path,mode="wb") as fw:
-            fw.write(buffer.getvalue())
+        # local file write
+        with open_file(file_name=local_file_path,mode="wb") as lwf:
+            lwf.write(buffer.getvalue())
 
         if not buffer.closed():
             buffer.close()
-        return md
+        return simple_file_metadata
+
+    def download(self,
+                 *args,
+                 **kwargs) -> SimpleFileMetadata:
+        """
+        download file from dropbox
+        :param local_file_path:     local file path which download
+        :param remote_file_path:    remote file path which dropbox contain
+        :param excepted_name:       excepted name which want to save
+        :return:
+        """
+        return self.download_as_file(*args,**kwargs)
+        pass
 
     def list_from_dropbox(self, remote_folder_path: str) -> ListFolderResult:
         if is_blank(remote_folder_path):
@@ -612,50 +656,6 @@ class SimpleDropboxAPIV2(SimpleAPI):
 
         return self.loop.run_until_complete(_async_list())
 
-    def download(self,
-                 local_file_path: str,
-                 remote_file_path: str,
-                 excepted_name: str = None) -> _FILEMETADATA_TYPE:
-        """
-        download file from dropbox
-        :param local_file_path:      local file path which download
-        :param remote_file_path:    remote file path which dropbox contain
-        :param excepted_name:       excepted name which want to save
-        :return:
-        """
-        if is_blank(pstr=remote_file_path):
-            raise DropboxAPIException("SimpleDropboxAPI#download remote_file_path is blank")
-
-        if local_file_path is not None:
-            while '//' in local_file_path:
-                local_file_path = local_file_path.replace('//', '/')
-        if remote_file_path is not None:
-            while '//' in remote_file_path:
-                remote_file_path = remote_file_path.replace('//', '/')
-
-        rf_path, rf_name = separate_path_and_name(file_path=remote_file_path)
-        if rf_name is None or rf_name.strip('') == '':
-            raise DropboxAPIException("download remote file is not exist!")
-        lf_path, lf_name = separate_path_and_name(file_path=local_file_path)
-        if lf_path is not None:
-            if not os.path.exists(lf_path):
-                os.mkdir(lf_path)
-        else:
-            lf_path = os.getcwd()
-
-        if excepted_name is not None:
-            lf_name = excepted_name
-        else:
-            if lf_name is None or lf_name.strip("") == '':
-                lf_name = rf_name
-        local_file_path = os.path.join(lf_path, lf_name)
-        if self.dbxa is None:
-            self.dbx()
-        # metadata, response = self.dbxa.files_download(remote_file_path)
-        metadata, response = self.download_to_response(remote_file_path)
-        with open_file(file_name=local_file_path, mode='wb') as lf:
-            lf.write(response.content)
-        return metadata
 
     def list(self, remote_folder_path: str) -> ListFolderResult:
         """
