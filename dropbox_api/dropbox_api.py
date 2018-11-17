@@ -696,7 +696,7 @@ class DropboxWrapper(SimpleWrapper, SimpleDropboxAPIV2):
             raise DropboxAPIException(message="#upload_folder , local file folder is not folder !")
 
         local_file_folder = lfpp.source_path
-        os.walk()
+
 
         pass
 

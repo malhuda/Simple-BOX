@@ -39,3 +39,8 @@ def get_suffix(mime: str) -> Optional[str]:
         if v == mime:
             return k
     return None
+
+
+def assert_state(state: bool, message: str) -> None:
+    if not state:
+        raise Exception(message)

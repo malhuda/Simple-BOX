@@ -79,6 +79,10 @@ class FilePathParser(BaseParser):
         return os.path.isdir(self.full_path_file_string)
 
     @property
+    def is_not_dir(self) -> bool:
+        return not self.is_dir
+
+    @property
     def driver(self) -> Optional[str]:
         return None if is_blank(os.path.splitdrive(self.full_path_file_string)[0]) else \
             os.path.splitdrive(self.full_path_file_string)[0]
