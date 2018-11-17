@@ -185,40 +185,12 @@ class SimpleAPI(object):
         self.option_map = {}
         self.loop = self.option_map.get('loop', asyncio.get_event_loop())
 
-    def upload(self,
-               local_file_path: str,
-               remote_file_path: str):
-
-        # just invalid path
-        if is_blank(remote_file_path):
-            raise SimpleAPIException(message="SimpleAPI#upload remote_file_path is blank!")
-
-        __local_file_path_parser = FilePathParser(full_path_file_string=local_file_path)
-
-        if __local_file_path_parser.is_blank:
-            raise SimpleAPIException(message="SimpleAPI#upload local_file_path is blank!")
-
-        if __local_file_path_parser.is_not_exist:
-            raise SimpleAPIException(message="SimpleAPI#upload local_file_path is not exist !")
-
+    def upload(self,*args,**kwargs):
         pass
 
-    def download(self,
-                 local_file_path: str,
-                 remote_file_path: str):
-        # just invalid path
-        if is_blank(remote_file_path):
-            raise SimpleAPIException(message="SimpleAPI#download remote_file_path is blank!")
-
-        __local_file_path_parser = FilePathParser(full_path_file_string=local_file_path)
-
-        if __local_file_path_parser.is_blank:
-            raise SimpleAPIException(message="SimpleAPI#download local_file_path is blank!")
-
-        if __local_file_path_parser.is_not_exist:
-            raise SimpleAPIException(message="SimpleAPI#download local_file_path is not exist !")
-
+    def download(self,*args,**kwargs):
         pass
+
 
 
 class SimpleDropboxAPIV2(SimpleAPI):
@@ -307,6 +279,7 @@ class SimpleDropboxAPIV2(SimpleAPI):
         sample as
             >>> self.download_as_file(local_file_path='/foo/bar.jpg',remote_file_path='/DEFAULT/cat.jpg')
             # `/DEFAULT/cat.jpg`
+
             >>> self.download_as_file(local_file_path='/foo/bar.jpg',remote_file_path='DEFAULT/cat.jpg')
             # `/DEFAULT/cat.jpg`
 
@@ -316,7 +289,13 @@ class SimpleDropboxAPIV2(SimpleAPI):
 
             >>> self.download_as_file(local_file_path='/foo/bar.jpg',remote_file_path='DEFAULT/cat.jpg',
             >>> excepted_name='EXCEPTED_DIR/dog.jpg')
-            # `/DEFAULT/dog.jpg`
+            # `/EXCEPTED_DIR/dog.jpg`
+
+            >>> self.download_as_file(local_file_path='/foo/bar.jpg',remote_folder_path='REMOTE_FOLDER',
+            >>> excepted_name='dog.jpg')
+            # `/REMOTE_FOLDER/dog.jpg`
+
+
         :return:
         """
 
@@ -376,34 +355,6 @@ class SimpleDropboxAPIV2(SimpleAPI):
             # auto set          /DEFAULT/A/bar
 
         return self.upload(local_file_path=local_file_path, remote_file_path=remote_file_path)
-
-    def upload(self,
-               local_file_path: str,
-               remote_file_path: str, ) -> SimpleFileMetadata:
-        """
-        upload to remote file
-        :param local_file_path:     local file path which is exist  or throw DropboxException
-        :param remote_file_path:    remote file path
-        :return:
-        """
-        super(SimpleDropboxAPIV2, self).upload(local_file_path=local_file_path, remote_file_path=remote_file_path)
-        if is_debug():
-            logger.debug("SimpleDropboxAPI#upload local_file_path=%s , remote_file_path=%s" % (
-                local_file_path, remote_file_path))
-
-        read_buffer = io.BytesIO()
-
-        with open_file(file_name=local_file_path, mode='rb') as lf:
-            read_buffer.write(lf.read())
-
-        simple_metadata = self.async_upload_bytes(read_buffer.getvalue(), remote_file_path)
-
-        if is_debug():
-            logger.debug("SimpleDropboxAPI#upload metadata=%s" % simple_metadata)
-        if not read_buffer.closed:
-            read_buffer.close()
-
-        return simple_metadata
 
     def upload_from_external_url(self,
                                  external_url: str,
@@ -524,7 +475,26 @@ class SimpleDropboxAPIV2(SimpleAPI):
             buffer.close()
         return md
 
+    def upload(self,
+               upload_flag: str = "local",
+               *args,
+               **kwargs) -> SimpleFileMetadata:
+        """
+        upload to remote file
+        :param upload_flag  default   `local` , if `local` upload from local ; if `url` upload from external url;
+        :return:
+        """
 
+        if is_debug():
+            logger.debug("SimpleDropboxAPI#upload args=%s , kwargs=%s" % (args, kwargs))
+
+        if upload_flag == 'local':
+            return self.upload_from_local(*args, **kwargs)
+        elif upload_flag == 'url':
+            return self.upload_from_external_url(*args, **kwargs)
+
+        else:
+            raise DropboxAPIException(message="#upload , unknown upload flag !")
 
     def download_from_dropbox(self,
                               remote_file_path: str) -> Tuple[SimpleFileMetadata, bytes]:
@@ -577,8 +547,7 @@ class SimpleDropboxAPIV2(SimpleAPI):
     def download_as_file(self,
                          remote_file_path: str,
                          local_file_path: str,
-                         excepted_name: str,
-                         suffix:str) -> SimpleFileMetadata:
+                         excepted_name: str,) -> SimpleFileMetadata:
         """
         download as local file
         # if `remote_file_path` not start with `/` , and combine `/` to head;
@@ -655,9 +624,6 @@ class SimpleDropboxAPIV2(SimpleAPI):
                  **kwargs) -> SimpleFileMetadata:
         """
         download file from dropbox
-        :param local_file_path:     local file path which download
-        :param remote_file_path:    remote file path which dropbox contain
-        :param excepted_name:       excepted name which want to save
         :return:
         """
         return self.download_as_file(*args,**kwargs)
@@ -685,35 +651,60 @@ class SimpleDropboxAPIV2(SimpleAPI):
         :param remote_folder_path:
         :return:
         """
-        if remote_folder_path is None:
-            raise DropboxAPIException("list remote folder path is None")
 
-        while '//' in remote_folder_path:
-            remote_folder_path = remote_folder_path.replace('//', '/')
-        rf_path, rf_name = separate_path_and_name(remote_folder_path)
-        if rf_path is None or rf_path.strip() == '':
-            raise DropboxAPIException("list remote folder path is None")
+        if is_blank(remote_folder_path):
+            raise DropboxAPIException("#list ,  remote folder path is blank !")
 
-        if self.dbxa is None:
-            self.dbx()
-        return self.dbxa.files_list_folder(rf_path)
+        remote_folder_path = DROPBOX_FILE_SEP+remote_folder_path if not remote_folder_path.startswith(DROPBOX_FILE_SEP) else remote_folder_path
 
-    def download_to_response(self, remote_file_path: str):
-        """
-        download to response which is from `request`
-        :param remote_file_path:
-        :return:
-        """
-        if remote_file_path is None or remote_file_path.strip() == '':
-            raise DropboxAPIException("download to bytes remote file path is None")
-        rf_path, rf_name = separate_path_and_name(file_path=remote_file_path)
-        if rf_name is None or rf_name.strip('') == '':
-            raise DropboxAPIException("download to bytes remote file is not exist!")
-        if self.dbxa is None:
-            self.dbx()
-        metadata, response = self.dbxa.files_download(remote_file_path)
-        return metadata, response
+        remote_folder_path = remote_folder_path+DROPBOX_FILE_SEP if not remote_folder_path.endswith(DROPBOX_FILE_SEP) else remote_folder_path
 
+        return self.async_list(remote_folder_path=remote_folder_path)
+
+
+class SimpleWrapper(object):
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def upload_folder(self, *args, **kwargs):
+        pass
+
+    def download_folder(self):
+        pass
+
+    def sync_folder(self):
+        pass
+
+    # ...
+
+
+class DropboxWrapper(SimpleWrapper, SimpleDropboxAPIV2):
+    def __init__(self, *args, **kwargs):
+        SimpleWrapper.__init__(self,*args,**kwargs)
+        SimpleDropboxAPIV2.__init__(self,*args,**kwargs)
+
+    def upload_folder(self,
+                      local_file_folder:str,
+                      remote_file_folder:str):
+
+        lfpp = FilePathParser(full_path_file_string=local_file_folder)
+        if is_blank(lfpp.source_path):
+            raise DropboxAPIException(message="#upload_folder , local file folder is blank !")
+        if not os.path.exists(lfpp.source_path):
+            raise DropboxAPIException(message="#upload_folder , local file folder is not exist !")
+        if not  os.path.isdir(lfpp.source_path):
+            raise DropboxAPIException(message="#upload_folder , local file folder is not folder !")
+
+        local_file_folder = lfpp.source_path
+        os.walk()
+
+        pass
+
+    def download_folder(self):
+        pass
+
+    def sync_folder(self):
+        pass
 
 
 class SimpleDropboxAPI(object):
@@ -901,7 +892,7 @@ class SimpleDropboxAPI(object):
                 break
 
         if logger.level == logging.DEBUG:
-            logger.info("upload from external request <%s> success!" % external_url)
+            logger.debug("upload from external request <%s> success!" % external_url)
         if self.dbxa is None:
             self.dbx()
         md = self.dbxa.files_upload(buffer.getvalue(), remote_folder_path, mute=True)
