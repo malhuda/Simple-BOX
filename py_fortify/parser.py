@@ -11,11 +11,13 @@
 """
 import os
 import re
+import ntpath
+import posixpath
 from typing import Optional, Tuple
 from urllib.parse import ParseResult, urlparse
 
 from py_fortify.constants import MIME_DICT
-from py_fortify.unity import is_blank
+from py_fortify.unity import is_blank, is_not_blank
 
 FILE_DOT = "."
 
@@ -83,6 +85,14 @@ class FilePathParser(BaseParser):
         return not self.is_dir
 
     @property
+    def is_windows_file(self) -> bool:
+        import ntpath
+        if ntpath.sep in self.raw_string:
+            return True
+        else:
+            return False
+
+    @property
     def driver(self) -> Optional[str]:
         return None if is_blank(os.path.splitdrive(self.full_path_file_string)[0]) else \
             os.path.splitdrive(self.full_path_file_string)[0]
@@ -137,6 +147,19 @@ class FilePathParser(BaseParser):
         return os.path.join(self.source_path,
                             excepted_source_name) if self.source_path is not None else excepted_source_name
 
+    def translate_win_file_linux_file(self):
+        if is_blank(self.raw_string):
+            return self.raw_string
+
+        if not self.is_windows_file:
+            return self.raw_string
+
+        return os.path.join(posixpath.sep, posixpath.sep.join(
+            filter(lambda _item: is_not_blank(_item) and _item != self.driver, self.raw_string.split(ntpath.sep))))
+
+    @classmethod
+    def translate(cls, win_file: str):
+        pass
     # ....
 
 
@@ -224,7 +247,7 @@ class UrlPathParser(BaseParser):
     def source_name_and_suffix(self) -> Optional[str]:
         if self.path is None:
             return None
-        return self.path.split("/")[-1]
+        return self.path.split(os.path.sep)[-1]
 
     @property
     def source_name(self) -> Optional[str]:

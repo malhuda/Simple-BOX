@@ -692,10 +692,23 @@ class DropboxWrapper(SimpleWrapper, SimpleDropboxAPIV2):
             raise DropboxAPIException(message="#upload_folder , local file folder is blank !")
         if not os.path.exists(lfpp.source_path):
             raise DropboxAPIException(message="#upload_folder , local file folder is not exist !")
-        if not  os.path.isdir(lfpp.source_path):
+        if not os.path.isdir(lfpp.source_path):
             raise DropboxAPIException(message="#upload_folder , local file folder is not folder !")
 
         local_file_folder = lfpp.source_path
+
+        def gen_local_file_path():
+            for roots, dirs, files in os.walk(top=local_file_folder):
+                for _dir in dirs:
+                    for _file in files:
+                        local_file_path = os.path.join(roots, _dir, _file)
+                        _f = FilePathParser(full_path_file_string=local_file_path)
+                        remote_file_path = _f.translate_win_file_linux_file()
+                        yield local_file_path, remote_file_path
+
+        for i in gen_local_file_path():
+            if is_debug():
+                logger.debug(i)
 
 
         pass

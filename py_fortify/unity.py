@@ -44,3 +44,10 @@ def get_suffix(mime: str) -> Optional[str]:
 def assert_state(state: bool, message: str) -> None:
     if not state:
         raise Exception(message)
+
+
+def equal_ignore(foo: str, bar: str) -> bool:
+    if foo is None and bar is None: return True
+    if foo is None: return False
+    if bar is None: return False
+    return foo.strip().lower() == bar.strip().lower()
