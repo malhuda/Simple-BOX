@@ -14,7 +14,7 @@ import ntpath
 import posixpath
 import unittest
 import requests
-from py_fortify import UrlPathParser, FilePathParser
+from py_fortify import UrlPathParser, FilePathParser, equal_ignore
 from py_fortify.constants import MIME_DICT
 from dropbox_api.dropbox_api import separate_path_and_name
 
@@ -63,6 +63,22 @@ class TestParser(unittest.TestCase):
         print(path, name)
         path2, name2 = a.source_path_and_name
         print(path2, name2)
+
+
+
+
+    def test_equal_ignore(self):
+        foo = "aaaa"
+        bar = "aaaa   "
+        r = equal_ignore(foo,bar)
+        print(r)
+
+    def test_translate_windows_file_to_linux(self):
+        path = "C:\\foo\\bar\\cat.jpg"
+        a = FilePathParser(full_path_file_string=path)
+        b =a.translate_win_file_linux_file()
+        print(b)
+
 
     pass
 
