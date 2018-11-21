@@ -11,8 +11,8 @@
 """
 import os
 import re
-import ntpath
-import posixpath
+from ntpath import sep as ntsep
+from posixpath import sep as posixsep
 from typing import Optional, Tuple
 from urllib.parse import ParseResult, urlparse
 
@@ -147,15 +147,18 @@ class FilePathParser(BaseParser):
         return os.path.join(self.source_path,
                             excepted_source_name) if self.source_path is not None else excepted_source_name
 
-    def translate_win_file_linux_file(self):
+    def translate_to_linux_file(self):
         if is_blank(self.raw_string):
             return self.raw_string
 
         if not self.is_windows_file:
             return self.raw_string
 
-        return os.path.join(posixpath.sep, posixpath.sep.join(
-            filter(lambda _item: is_not_blank(_item) and _item != self.driver, self.raw_string.split(ntpath.sep))))
+        return os.path.join(posixsep, posixsep.join(
+            filter(lambda _item: is_not_blank(_item) and _item != self.driver, self.raw_string.split(ntsep))))
+
+    def translate_to_linux_parser(self):
+        return FilePathParser(full_path_file_string=self.translate_to_linux_file())
 
     @classmethod
     def translate(cls, win_file: str):
