@@ -8,16 +8,17 @@
  Time: 10/4/18
 """
 from __future__ import print_function
+
 import asyncio
 import io
 import logging
 import os
 import sys
+from concurrent.futures import ThreadPoolExecutor
+from typing import List, Optional, Tuple
 
 import dropbox
 import requests
-from typing import List, Optional, Tuple
-from concurrent.futures import ThreadPoolExecutor
 from dropbox.files import FileMetadata, ListFolderResult
 from flask import flash, request, redirect, render_template
 from werkzeug.utils import secure_filename
@@ -60,7 +61,8 @@ def is_debug():
     return logger.level == logging.DEBUG
 
 
-# ......
+# TODO
+# dropbox content hash compute , https://github.com/dropbox/dropbox-api-content-hasher/blob/master/python/dropbox_content_hasher.py
 
 #  ==>>> single common methods
 
@@ -238,7 +240,7 @@ class SimpleDropboxAPIV2(SimpleAPI):
 
         if self.dbxa is None:
             self.dbx()
-        return self.dbxa.files_upload(file_bytes, remote_file_path, mute=True)
+        return self.dbxa.files_upload(file_bytes, remote_file_path, mode=dropbox.files.WriteMode.overwrite, mute=True)
 
     def async_upload_bytes(self,
                            file_bytes: bytes,
@@ -302,7 +304,7 @@ class SimpleDropboxAPIV2(SimpleAPI):
         if is_blank(remote_file_path):
             if is_blank(remote_folder_path):
                 raise DropboxAPIException(
-                    "#upload_with_excepted_name, remote_file_path is blank and remote_folder_path "
+                    "#upload_from_local, remote_file_path is blank and remote_folder_path "
                     "is also blank !")
 
             if not remote_folder_path.startswith(DROPBOX_FILE_SEP):
@@ -317,13 +319,13 @@ class SimpleDropboxAPIV2(SimpleAPI):
         lfpp = FilePathParser(full_path_file_string=local_file_path)
 
         if lfpp.is_blank:
-            raise DropboxAPIException("#upload_with_excepted_name, local file path is blank !")
+            raise DropboxAPIException("#upload_from_local, local file path is blank !")
 
         if lfpp.is_not_exist:
-            raise DropboxAPIException("#upload_with_excepted_name, local file path is not exist !")
+            raise DropboxAPIException("#upload_from_local, local file path is not exist !")
 
         if lfpp.is_not_file:
-            raise DropboxAPIException("#upload_with_excepted_name, local file path is not a file !")
+            raise DropboxAPIException("#upload_from_local, local file path is not a file !")
 
         rfpp = FilePathParser(full_path_file_string=remote_file_path)
         if is_not_blank(excepted_name):
@@ -354,8 +356,12 @@ class SimpleDropboxAPIV2(SimpleAPI):
             # remote_file_path  /DEFAULT/A/bar
             # local_file_path   /foo/bar
             # auto set          /DEFAULT/A/bar
+        with open_file(file_name=local_file_path, mode="rb") as fr:
+            metadata = self.async_upload_bytes(file_bytes=fr.read(), remote_file_path=remote_file_path)
 
-        return self.upload(local_file_path=local_file_path, remote_file_path=remote_file_path)
+        if logger.level == logging.DEBUG:
+            logger.debug("upload_from_local metadata is %s" % metadata)
+        return metadata
 
     def upload_from_external_url(self,
                                  external_url: str,
@@ -707,33 +713,34 @@ class DropboxWrapper(SimpleWrapper, SimpleDropboxAPIV2):
             remote_file_folder = remote_file_folder + DROPBOX_FILE_SEP if not remote_file_folder.endswith(
                 DROPBOX_FILE_SEP) else remote_file_folder
 
-        def gen_local_file_path():
-            for roots, dirs, files in os.walk(top=local_file_folder):
-                if len(dirs) > 0:
-                    for _dir in dirs:
-                        for _file in files:
-                            local_file_path = os.path.join(roots, _dir, _file)
-                            _f = FilePathParser(full_path_file_string=local_file_path)
-                            remote_file_path = _f.translate_to_linux_file()
-                            yield local_file_path, remote_file_path
-                else:
-                    for _file in files:
-                        local_file_path = os.path.join(roots, _file)
-                        _f = FilePathParser(full_path_file_string=local_file_path)
-                        remote_file_path = _f.translate_to_linux_file()
-                        yield local_file_path, remote_file_path
+        def gen_local_file_path(folder: str):
+            global roots, dirs
+            for roots, dirs, files in os.walk(top=folder):
+                for _file in files:
+                    local_file_path = os.path.join(roots, _file)
+                    _f = FilePathParser(full_path_file_string=local_file_path)
+                    remote_file_path = _f.translate_to_linux_file()
+                    yield local_file_path, remote_file_path, _f.source_name
 
-        for glfp in gen_local_file_path():
+            if len(dirs) > 0:
+                for _dir in dirs:
+                    local_folder_path = os.path.join(roots, _dir)
+                    gen_local_file_path(folder=local_folder_path)
+
+        for glfp in gen_local_file_path(folder=local_file_folder):
             _local_file_path = glfp[0]
             _remote_file_path = glfp[1]
+            _source_file_name = glfp[2]
             if is_not_blank(remote_file_folder):
-                _remote_file_path = os.path.join(remote_file_folder, _remote_file_path)
+                _remote_file_path = os.path.join(remote_file_folder, _source_file_name)
 
             if is_debug():
                 logger.debug("%s ==> %s " % (_local_file_path, _remote_file_path))
-            md = self.upload(local_file_path=_local_file_path, remote_file_path=_remote_file_path)
-            print(md)
-            # upload_file_pool.submit(fn= self.upload ,local_file_path = _local_file_path, remote_file_path = _remote_file_path)
+            # md = self.upload(local_file_path=_local_file_path, remote_file_path=_remote_file_path)
+            # print(md)
+            future = upload_file_pool.submit(fn=self.upload, local_file_path=_local_file_path,
+                                             remote_file_path=_remote_file_path)
+            print(future.result())
 
         pass
 

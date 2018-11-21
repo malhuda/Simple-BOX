@@ -77,7 +77,7 @@ class FilePathParser(BaseParser):
         return not self.is_file
 
     @property
-    def is_dir(self) -> bool:
+    def  is_dir(self) -> bool:
         return os.path.isdir(self.full_path_file_string)
 
     @property
@@ -86,8 +86,7 @@ class FilePathParser(BaseParser):
 
     @property
     def is_windows_file(self) -> bool:
-        import ntpath
-        if ntpath.sep in self.raw_string:
+        if ntsep in self.raw_string:
             return True
         else:
             return False
@@ -117,6 +116,8 @@ class FilePathParser(BaseParser):
 
     @property
     def source_path(self) -> Optional[str]:
+        if self.is_dir:
+            return self.full_path_file_string
         if self.source_name is None:
             return self.full_path_file_string
         return self.full_path_file_string.replace(self.source_name, "")
