@@ -9,11 +9,10 @@
 """
 from __future__ import print_function
 
-import logging
-import sys
-import os
-import requests
 import io
+import logging
+import os
+
 from googleapiclient.discovery import build, Resource
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 from httplib2 import Http

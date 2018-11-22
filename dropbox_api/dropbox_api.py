@@ -23,7 +23,7 @@ from dropbox.files import FileMetadata, ListFolderResult
 from flask import flash, request, redirect, render_template
 from werkzeug.utils import secure_filename
 
-from py_fortify import is_not_blank, is_blank, open_file, FilePathParser, UrlPathParser, get_suffix
+from py_fortify import is_not_blank, is_blank, open_file, FilePathParser, UrlPathParser, get_suffix, assert_state
 from py_fortify.parser import BaseParser
 
 level = logging.DEBUG
@@ -34,9 +34,6 @@ logger = logging.getLogger(__name__)
 logger.setLevel(level)
 
 ACCESS_TOKEN = 'i8G-xobvWUQAAAAAAAABAAzg8_EbfSdZJIGzH93kXBoBGloa7jJuHEUJ167U34eC'
-
-FILE_SEP = "/"
-FILE_DOT = "."
 
 DROPBOX_FILE_SEP = "/"
 DROPBOX_FILE_DOT = "."
@@ -562,6 +559,10 @@ class SimpleDropboxAPIV2(SimpleAPI):
         if lfpp.is_blank:
             raise DropboxAPIException(message="#download_as_file , local file path is blank !")
 
+        # fix if local folder is not exist , or create it
+        if not os.path.exists(lfpp.source_path):
+            os.mkdir(lfpp.source_path)
+
         # if source name not in local file path , throw `DropboxAPIException`
         # if is_blank(lfpp.source_name):
         #     raise DropboxAPIException(message="#download_as_file , local file path source name is blank !")
@@ -711,6 +712,8 @@ class DropboxWrapper(SimpleWrapper, SimpleDropboxAPIV2):
         pass
 
 
+# ================================>
+
 def separate_path_and_name(file_path: str):
     # if is_blank(file_path):
     #     return None, None
@@ -798,13 +801,14 @@ class SimpleDropboxAPI(object):
             raise DropboxAPIException("SimpleDropboxAPI#upload local_file_path not exist!")
 
         if is_blank(excepted_name):
-            excepted_name = local_file_path.split(FILE_SEP)[-1]
+            excepted_name = local_file_path.split(DROPBOX_FILE_SEP)[-1]
 
         # not exist file name, sample as `/foo/bar/`, in this case , `remote_file_path` will be set as
         # `/foo/bar`+excepted_name
 
         # if `remote_file_path` is `/foo/bar` or `/foo/bar.txt` ,then `bar` or `bar.txt` will be excepted_name
-        if not remote_file_path.__contains__(FILE_DOT) and is_blank(remote_file_path.split(FILE_SEP)[-1]):
+        if not remote_file_path.__contains__(DROPBOX_FILE_DOT) and is_blank(
+                remote_file_path.split(DROPBOX_FILE_SEP)[-1]):
             remote_file_path = os.path.join(remote_file_path, excepted_name)
 
         if logger.level == logging.DEBUG:
@@ -844,13 +848,14 @@ class SimpleDropboxAPI(object):
             raise DropboxAPIException("SimpleDropboxAPI#upload local_file_path not exist!")
 
         if is_blank(excepted_name):
-            excepted_name = local_file_path.split(FILE_SEP)[-1]
+            excepted_name = local_file_path.split(DROPBOX_FILE_SEP)[-1]
 
         # not exist file name, sample as `/foo/bar/`, in this case , `remote_file_path` will be set as
         # `/foo/bar`+excepted_name
 
         # if `remote_file_path` is `/foo/bar` or `/foo/bar.txt` ,then `bar` or `bar.txt` will be excepted_name
-        if not remote_file_path.__contains__(FILE_DOT) and is_blank(remote_file_path.split(FILE_SEP)[-1]):
+        if not remote_file_path.__contains__(DROPBOX_FILE_DOT) and is_blank(
+                remote_file_path.split(DROPBOX_FILE_SEP)[-1]):
             remote_file_path = os.path.join(remote_file_path, excepted_name)
 
         if logger.level == logging.DEBUG:
@@ -1029,19 +1034,11 @@ class SimpleDropboxAPI(object):
         return metadata, response
 
 
-class SimpleDBXServiceAPI(SimpleDropboxAPI):
+class SimpleDBXServiceAPI(SimpleDropboxAPIV2):
 
     # service implement
     def __init__(self, access_token) -> None:
         super().__init__(access_token=access_token)
-
-    def simple_list_entries(self, remote_folder_path: str) -> _FILEMETADATA_LIST_TYPE:
-        """
-        simple list
-        :param remote_folder_path:
-        :return:
-        """
-        return self.list(remote_folder_path=remote_folder_path).entries
 
     @response_wrapper
     def simple_list(self, remote_folder_path: str) -> List[dict]:
@@ -1050,52 +1047,54 @@ class SimpleDBXServiceAPI(SimpleDropboxAPI):
         :param remote_folder_path:
         :return:
         """
-        return [SimpleFileMetadata(sfm).to_dict() for sfm in
-                self.simple_list_entries(remote_folder_path=remote_folder_path)]
+
+        assert_state(is_blank(pstr=remote_folder_path),
+                     "SimpleDBXServiceAPI#simple_list , remote_folder_path is blank !")
+        return [SimpleFileMetadata(sfm).to_dict() for sfm in self.list(remote_folder_path=remote_folder_path).entries]
 
     @response_wrapper
-    def simple_upload_via_local(self,
-                                local_file_path: str,
-                                remote_file_path: str = "/DEFAULT/",
-                                excepted_name: str = None) -> dict:
+    def simple_upload_from_local(self,
+                                 local_file_path: str,
+                                 remote_file_path: str = None,
+                                 excepted_name: str = None) -> dict:
         """
         :param local_file_path:
         :param remote_file_path:
         :param excepted_name:
         :return:
         """
-        return SimpleFileMetadata(self.upload(local_file_path=local_file_path,
-                                              remote_file_path=remote_file_path,
-                                              excepted_name=excepted_name)).to_dict()
+        lfpp = FilePathParser(full_path_file_string=local_file_path)
+        assert_state(lfpp.is_blank, "SimpleDBXServiceAPI#simple_upload_from_local , local_file_path is blank !")
+        assert_state(lfpp.is_not_exist, "SimpleDBXServiceAPI#simple_upload_from_local ,local_file_path is not exist !")
+
+        remote_file_path = remote_file_path or "DEFAULT"
+
+        return self.upload(local_file_path=local_file_path,
+                           remote_file_path=remote_file_path,
+                           excepted_name=excepted_name).to_dict()
 
     @response_wrapper
-    def simple_upload_via_url(self, external_url: str, remote_file_path: str = "/DEFAULT/", **kwargs) -> dict:
+    def simple_upload_from_url(self,
+                               external_url: str,
+                               remote_file_path: str = None,
+                               excepted_name: str = None,
+                               **kwargs) -> dict:
         """
+        :param excepted_name:
         :param external_url:
         :param remote_file_path:
         :return:
         """
-        excepted_name = kwargs.get("excepted_name")
-        if not is_blank(excepted_name):
-            return sda.upload_from_external(external_url=external_url, remote_folder_path=remote_file_path,
-                                            excepted_name=excepted_name).to_dict()
-        return sda.upload_from_external(external_url=external_url, remote_folder_path=remote_file_path).to_dict()
+        expp = UrlPathParser(full_path_file_string=external_url)
+        assert_state(expp.is_blank, "SimpleDBXServiceAPI#simple_upload_from_url , external_url is blank !")
+        assert_state(expp.is_not_http,
+                     "SimpleDBXServiceAPI#simple_upload_from_url , external_url is not http protocol !")
 
-    @response_wrapper
-    def simple_download(self,
-                        local_file_path: str,
-                        remote_file_path: str,
-                        excepted_name: str = None) -> dict:
-        """
-
-        :param local_file_path:
-        :param remote_file_path:
-        :param excepted_name:
-        :return:
-        """
-        return SimpleFileMetadata(self.download(local_file_path=local_file_path,
-                                                remote_file_path=remote_file_path,
-                                                excepted_name=excepted_name)).to_dict()
+        return sda.upload(upload_flag="url",
+                          external_url=external_url,
+                          remote_file_path=remote_file_path,
+                          excepted_name=excepted_name,
+                          **kwargs).to_dict()
 
 
 # restful API
@@ -1111,6 +1110,9 @@ from concurrent.futures import ThreadPoolExecutor
 thread_pool = ThreadPoolExecutor(10)
 queue_pool = Queue(10)
 
+dropbox_rest_main_url = "/api/dropbox/"
+dropbox_view_main_url = "/view/dropbox/"
+
 
 @app.route("/")
 @app.route("/index")
@@ -1118,58 +1120,42 @@ def index():
     return render_template("index.html", )
 
 
-@app.route("/api/dropbox/folder/list", methods=['GET', 'POST'])
+@app.route(dropbox_rest_main_url + "folder/list", methods=['GET', 'POST'])
 def list_folder():
     """
     sample as :
-    /api/dropbox/folder/list?rfn=default
+    /api/dropbox/folder/list?rfp=default
     :return:
     """
-    rfn = request.args.get("remote_folder_name") or request.args.get("rfn")
-    if is_blank(rfn):
-        return flask.jsonify(
-            {"response": "remote folder name is blank in '/api/dropbox/folder/list'", "success": False})
-    if not rfn.startswith("/"):
-        rfn = "/" + rfn
-    if not rfn.endswith("/"):
-        rfn = rfn + "/"
-    res = sda.simple_list(remote_folder_path=rfn)
+    rfp = request.args.get("remote_folder_path") or request.args.get("rfp")
+    res = sda.simple_list(remote_folder_path=rfp)
     return flask.jsonify(res)
 
 
-@app.route("/api/dropbox/file/upload", methods=['GET', 'POST'])
-def upload_file_from_external_url():
+@app.route(dropbox_rest_main_url + "file/upload", methods=['GET', 'POST'])
+def upload_from_external_url():
     """
     sample as:
     /api/dropbox/file/upload?eu=https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_272x92dp.png
     :return:
     """
     eu = request.args.get("external_url") or request.args.get("eu")
-    if is_blank(eu):
-        return flask.jsonify({"response": "external url is blank in '/api/dropbox/file/upload'", "success": False})
     en = request.args.get("excepted_name") or request.args.get('en')
 
-    # if not queue_pool.full():
-    #     pass
-    future = thread_pool.submit(fn=sda.simple_upload_via_url, external_url=eu, excepted_name=en)
-    if future.done():
-        return flask.jsonify(future.result())
-    res = sda.simple_upload_via_url(external_url=eu, excepted_name=en)
+    res = sda.simple_upload_from_url(external_url=eu, excepted_name=en)
     return flask.jsonify(res)
 
 
-def allowed_file(filename):
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in ['txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif']
-
-
-@app.route('/view/dropbox/file/upload', methods=['GET', 'POST'])
-def upload_file():
+@app.route(dropbox_view_main_url + 'file/upload', methods=['GET', 'POST'])
+def upload_file_from_local():
     """
-    sample as :
     /view/dropbox/file/upload
     :return:
     """
+
+    def allowed_file(filename):
+        return '.' in filename and filename.rsplit('.', 1)[1].lower() in ['txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif']
+
     if request.method == 'POST':
         # check if the post request has the file part
         if 'file' not in request.files:
@@ -1183,7 +1169,8 @@ def upload_file():
             return redirect(request.url)
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
-            sda.upload_from_bytes(file.read(), "/DEFAULT/", filename)
+            remote_file_path = os.path.join("/DEFAULT/", filename)
+            sda.async_upload_bytes(file_bytes=file.read(), remote_file_path=remote_file_path)
     return '''
     <!doctype html>
     <title>上传文件</title>
@@ -1207,7 +1194,7 @@ def cache_with_coroutine(file_path: str, w_data: bytes) -> None:
     LOOP.run_until_complete(coroutine)
 
 
-@app.route('/showtime')
+@app.route(dropbox_view_main_url + '/showtime')
 def showtime():
     """
     直接名称：/showtime?rfn=/DEFAULT/googlelogo_color_272x92dp.png
@@ -1233,9 +1220,10 @@ def showtime():
             cache_file_name = filter_file_list[0]
             # 缓存中目标文件路径
             target_cache_file_path = os.path.join(local_cache_path, cache_file_name)
+
             if os.path.exists(target_cache_file_path) and os.path.isfile(target_cache_file_path):
-                file_suffix = target_cache_file_path.split(".")[-1]
-                file_mime = get_mime(file_suffix)
+                tfpp = FilePathParser(full_path_file_string=target_cache_file_path)
+                file_mime = get_mime(tfpp.source_suffix)
                 with open_file(target_cache_file_path, 'rb') as f_read:
                     return flask.send_file(
                         io.BytesIO(f_read.read()),
@@ -1257,7 +1245,7 @@ def showtime():
                 file_suffix = real_name.split(".")[-1]
                 file_mime = get_mime(file_suffix)
 
-                md, res = sda.download_to_response(remote_file_path=item.get("path"))
+                md, res = sda.download_as_bytes(remote_file_path=item.get("path"))
 
                 # cache file via coroutine
                 local_cache_file = os.path.join(local_cache_path, real_name)
@@ -1275,7 +1263,7 @@ def showtime():
         file_suffix = rfn.split(".")[-1] or rf_name.split(".")[-1]
         file_mime = get_mime(file_suffix)
         try:
-            md, res = sda.download_to_response(remote_file_path=rfn)
+            md, res = sda.download_as_bytes(remote_file_path=rfn)
             # cache file via coroutine
             local_cache_file = os.path.join(local_cache_path, rf_name)
             cache_with_coroutine(file_path=local_cache_file, w_data=res.content)
@@ -1294,7 +1282,7 @@ def showtime():
                 if str(real_name).__contains__(rf_name):
                     file_suffix = real_name.split(".")[-1] or real_name.split(".")[-1]
                     file_mime = get_mime(file_suffix)
-                    md, res = sda.download_to_response(remote_file_path=item.get("path"))
+                    md, res = sda.download_as_bytes(remote_file_path=item.get("path"))
                     # cache file via coroutine
                     local_cache_file = os.path.join(local_cache_path, real_name)
                     cache_with_coroutine(file_path=local_cache_file, w_data=res.content)

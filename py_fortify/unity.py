@@ -42,7 +42,7 @@ def get_suffix(mime: str) -> Optional[str]:
 
 
 def assert_state(state: bool, message: str) -> None:
-    if not state:
+    if state:
         raise Exception(message)
 
 
