@@ -1194,7 +1194,7 @@ def cache_with_coroutine(file_path: str, w_data: bytes) -> None:
     LOOP.run_until_complete(coroutine)
 
 
-@app.route(dropbox_view_main_url + '/showtime')
+@app.route(dropbox_view_main_url + 'showtime')
 def showtime():
     """
     直接名称：/showtime?rfn=/DEFAULT/googlelogo_color_272x92dp.png
