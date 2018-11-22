@@ -1141,8 +1141,9 @@ def upload_from_external_url():
     """
     eu = request.args.get("external_url") or request.args.get("eu")
     en = request.args.get("excepted_name") or request.args.get('en')
+    rfp = request.args.get("remote_file_path") or request.args.get('rfp')
 
-    res = sda.simple_upload_from_url(external_url=eu, excepted_name=en)
+    res = sda.simple_upload_from_url(external_url=eu, remote_file_path=rfp, excepted_name=en)
     return flask.jsonify(res)
 
 
