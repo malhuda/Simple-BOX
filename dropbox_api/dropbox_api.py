@@ -61,8 +61,7 @@ def is_debug():
     return logger.level == logging.DEBUG
 
 
-# TODO
-# dropbox content hash compute , https://github.com/dropbox/dropbox-api-content-hasher/blob/master/python/dropbox_content_hasher.py
+# TODO dropbox content hash compute , https://github.com/dropbox/dropbox-api-content-hasher/blob/master/python/dropbox_content_hasher.py
 
 #  ==>>> single common methods
 
@@ -74,50 +73,6 @@ class DropboxAPIException(Exception):
 class SimpleAPIException(Exception):
     def __init__(self, message) -> None:
         self.message = message
-
-
-def separate_path_and_name(file_path: str):
-    # if is_blank(file_path):
-    #     return None, None
-    # fps = file_path.split(FILE_SEP)
-    # f_name = fps[-1]
-    # f_path = '/'
-    # for it in fps[0:-1]:
-    #     f_path = os.path.join(f_path, it)
-    # f_path = f_path + "/"
-    # return f_path, f_name
-    return FilePathParser(full_path_file_string=file_path).source_path_and_name
-
-
-def fetch_filename_from_url(url: str) -> str:
-    # if is_blank(url):
-    #     return ""
-    # last_sep = url.split("/")[-1]
-    # if last_sep.__contains__("?"):
-    #     return re.findall(r'^(.+?)\?', last_sep)[0]
-    # elif last_sep.__contains__(":"):
-    #     return re.findall(r'^(.+?):', last_sep)[0]
-    # return last_sep
-    url_parser = UrlPathParser(full_path_file_string=url)
-    return "" if url_parser.source_name_and_suffix is None else url_parser.source_name_and_suffix
-
-
-def get_mime(file_suffix: str) -> Optional[str]:
-    if file_suffix is None:
-        raise DropboxAPIException("file suffix is None !")
-    if file_suffix.startswith("."):
-        file_suffix = file_suffix.replace(".", "")
-    mime_dict = {
-        "jpeg": "image/jpeg",
-        "jpg": "image/jpg",
-        "png": "image/png",
-        "csv": "text/csv",
-        "pdf": "application/pdf",
-        "html": "text/html",
-        "txt": "text/txt",
-        # ....
-    }
-    return mime_dict.get(file_suffix)
 
 
 def response_wrapper(func):
@@ -240,6 +195,14 @@ class SimpleDropboxAPIV2(SimpleAPI):
 
         if self.dbxa is None:
             self.dbx()
+
+        # upload_session_start_result = self.dbxa.files_upload_session_start(file_bytes)
+        # cursor = dropbox.files.UploadSessionCursor(session_id=upload_session_start_result.session_id,
+        #                                            offset=len(file_bytes))
+        # commit = dropbox.files.CommitInfo(path=remote_file_path)
+        # return self.dbxa.files_upload_session_finish(file_bytes,
+        #                                 cursor,
+        #                                 commit)
         return self.dbxa.files_upload(file_bytes, remote_file_path, mode=dropbox.files.WriteMode.overwrite, mute=True)
 
     def async_upload_bytes(self,
@@ -329,7 +292,6 @@ class SimpleDropboxAPIV2(SimpleAPI):
 
         rfpp = FilePathParser(full_path_file_string=remote_file_path)
         if is_not_blank(excepted_name):
-            # TODO
             if DROPBOX_FILE_SEP in excepted_name:
                 remote_file_path = DROPBOX_FILE_SEP + excepted_name if not excepted_name.startswith(
                     DROPBOX_FILE_SEP) else excepted_name
@@ -410,7 +372,6 @@ class SimpleDropboxAPIV2(SimpleAPI):
         rfpp = FilePathParser(full_path_file_string=remote_file_path)
 
         if is_not_blank(excepted_name):
-            # TODO
             if DROPBOX_FILE_SEP in excepted_name:
                 excepted_name = DROPBOX_FILE_SEP + excepted_name \
                     if not excepted_name.startswith(DROPBOX_FILE_SEP) else excepted_name
@@ -740,7 +701,6 @@ class DropboxWrapper(SimpleWrapper, SimpleDropboxAPIV2):
             # print(md)
             future = upload_file_pool.submit(fn=self.upload, local_file_path=_local_file_path,
                                              remote_file_path=_remote_file_path)
-            print(future.result())
 
         pass
 
@@ -749,6 +709,50 @@ class DropboxWrapper(SimpleWrapper, SimpleDropboxAPIV2):
 
     def sync_folder(self):
         pass
+
+
+def separate_path_and_name(file_path: str):
+    # if is_blank(file_path):
+    #     return None, None
+    # fps = file_path.split(FILE_SEP)
+    # f_name = fps[-1]
+    # f_path = '/'
+    # for it in fps[0:-1]:
+    #     f_path = os.path.join(f_path, it)
+    # f_path = f_path + "/"
+    # return f_path, f_name
+    return FilePathParser(full_path_file_string=file_path).source_path_and_name
+
+
+def fetch_filename_from_url(url: str) -> str:
+    # if is_blank(url):
+    #     return ""
+    # last_sep = url.split("/")[-1]
+    # if last_sep.__contains__("?"):
+    #     return re.findall(r'^(.+?)\?', last_sep)[0]
+    # elif last_sep.__contains__(":"):
+    #     return re.findall(r'^(.+?):', last_sep)[0]
+    # return last_sep
+    url_parser = UrlPathParser(full_path_file_string=url)
+    return "" if url_parser.source_name_and_suffix is None else url_parser.source_name_and_suffix
+
+
+def get_mime(file_suffix: str) -> Optional[str]:
+    if file_suffix is None:
+        raise DropboxAPIException("file suffix is None !")
+    if file_suffix.startswith("."):
+        file_suffix = file_suffix.replace(".", "")
+    mime_dict = {
+        "jpeg": "image/jpeg",
+        "jpg": "image/jpg",
+        "png": "image/png",
+        "csv": "text/csv",
+        "pdf": "application/pdf",
+        "html": "text/html",
+        "txt": "text/txt",
+        # ....
+    }
+    return mime_dict.get(file_suffix)
 
 
 class SimpleDropboxAPI(object):
@@ -1302,25 +1306,6 @@ def showtime():
             # can not match with remote files
             return flask.jsonify(
                 {"response": "rf name can not match with remote files in '/showtime'", "success": False})
-
-
-# upload demo
-# print(sda.simple_upload_via_local(local_file_path='/Users/helix/Dev/PycharmProjects/pyenv_dev/dropbox_api/hello2.txt',
-#                                   remote_file_path="/DEFAULT/",
-#                                   excepted_name="dev.txt"))
-# download demo
-# print(sda.simple_download(local_file_path='', remote_file_path="/DEFAULT/dev.txt", excepted_name='hello2.txt'))
-# list demo
-# print(sda.list(remote_folder_path="/DEFAULT/"))
-# simple list
-# print(sda.simple_list(remote_folder_path="/DEFAULT/"))
-
-# upload from external
-# sda.upload_from_external(
-#     external_url='http://masnun.com/2016/09/18/python-using-the-requests-module-to-download-large-files-efficiently.html',
-#     remote_folder_path="/DEFAULT/", custom_headers={"User-Agent": "fake"}, )
-#
-#
 
 
 def dropbox_cli():
