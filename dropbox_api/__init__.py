@@ -7,4 +7,4 @@
  File: __init__.py.py
  Time: 10/4/18
 """
-from .dropbox_api import dropbox_cli, app,SimpleDropboxAPIV2
+from .dropbox_api import dropbox_cli, app,SimpleDropboxAPIV2 , logger

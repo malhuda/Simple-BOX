@@ -15,3 +15,7 @@ datefmt = '%Y-%m-%d %H:%M'
 logging.basicConfig(level=level, format=format, datefmt=datefmt)
 logger = logging.getLogger("py_fortify")
 logger.setLevel(level)
+
+
+def is_debug():
+    return logger.level == logging.DEBUG
