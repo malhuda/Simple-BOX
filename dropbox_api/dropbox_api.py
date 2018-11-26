@@ -185,12 +185,11 @@ class SimpleAPI(object):
         self.option_map = {}
         self.loop = self.option_map.get('loop', asyncio.get_event_loop())
 
-    def upload(self,*args,**kwargs):
+    def upload(self, *args, **kwargs):
         pass
 
-    def download(self,*args,**kwargs):
+    def download(self, *args, **kwargs):
         pass
-
 
 
 class SimpleDropboxAPIV2(SimpleAPI):
@@ -329,7 +328,8 @@ class SimpleDropboxAPIV2(SimpleAPI):
         if is_not_blank(excepted_name):
             # TODO
             if DROPBOX_FILE_SEP in excepted_name:
-                remote_file_path = DROPBOX_FILE_SEP + excepted_name if not excepted_name.startswith(DROPBOX_FILE_SEP) else excepted_name
+                remote_file_path = DROPBOX_FILE_SEP + excepted_name if not excepted_name.startswith(
+                    DROPBOX_FILE_SEP) else excepted_name
             else:
                 remote_file_path = rfpp.set_source_name(excepted_name.split(DROPBOX_FILE_SEP)[-1])
 
@@ -547,7 +547,7 @@ class SimpleDropboxAPIV2(SimpleAPI):
     def download_as_file(self,
                          remote_file_path: str,
                          local_file_path: str,
-                         excepted_name: str,) -> SimpleFileMetadata:
+                         excepted_name: str, ) -> SimpleFileMetadata:
         """
         download as local file
         # if `remote_file_path` not start with `/` , and combine `/` to head;
@@ -612,7 +612,7 @@ class SimpleDropboxAPIV2(SimpleAPI):
         buffer.write(bytes_array)
 
         # local file write
-        with open_file(file_name=local_file_path,mode="wb") as lwf:
+        with open_file(file_name=local_file_path, mode="wb") as lwf:
             lwf.write(buffer.getvalue())
 
         if not buffer.closed():
@@ -626,7 +626,7 @@ class SimpleDropboxAPIV2(SimpleAPI):
         download file from dropbox
         :return:
         """
-        return self.download_as_file(*args,**kwargs)
+        return self.download_as_file(*args, **kwargs)
         pass
 
     def list_from_dropbox(self, remote_folder_path: str) -> ListFolderResult:
@@ -655,9 +655,11 @@ class SimpleDropboxAPIV2(SimpleAPI):
         if is_blank(remote_folder_path):
             raise DropboxAPIException("#list ,  remote folder path is blank !")
 
-        remote_folder_path = DROPBOX_FILE_SEP+remote_folder_path if not remote_folder_path.startswith(DROPBOX_FILE_SEP) else remote_folder_path
+        remote_folder_path = DROPBOX_FILE_SEP + remote_folder_path if not remote_folder_path.startswith(
+            DROPBOX_FILE_SEP) else remote_folder_path
 
-        remote_folder_path = remote_folder_path+DROPBOX_FILE_SEP if not remote_folder_path.endswith(DROPBOX_FILE_SEP) else remote_folder_path
+        remote_folder_path = remote_folder_path + DROPBOX_FILE_SEP if not remote_folder_path.endswith(
+            DROPBOX_FILE_SEP) else remote_folder_path
 
         return self.async_list(remote_folder_path=remote_folder_path)
 
@@ -680,12 +682,12 @@ class SimpleWrapper(object):
 
 class DropboxWrapper(SimpleWrapper, SimpleDropboxAPIV2):
     def __init__(self, *args, **kwargs):
-        SimpleWrapper.__init__(self,*args,**kwargs)
-        SimpleDropboxAPIV2.__init__(self,*args,**kwargs)
+        SimpleWrapper.__init__(self, *args, **kwargs)
+        SimpleDropboxAPIV2.__init__(self, *args, **kwargs)
 
     def upload_folder(self,
-                      local_file_folder:str,
-                      remote_file_folder:str):
+                      local_file_folder: str,
+                      remote_file_folder: str):
 
         lfpp = FilePathParser(full_path_file_string=local_file_folder)
         if is_blank(lfpp.source_path):
@@ -709,7 +711,6 @@ class DropboxWrapper(SimpleWrapper, SimpleDropboxAPIV2):
         for i in gen_local_file_path():
             if is_debug():
                 logger.debug(i)
-
 
         pass
 
