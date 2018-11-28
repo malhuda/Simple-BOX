@@ -19,6 +19,7 @@ import dropbox
 import requests
 from dropbox.files import FileMetadata, ListFolderResult
 from flask import flash, request, redirect, render_template
+from requests import Response
 from werkzeug.utils import secure_filename
 
 from py_fortify import is_not_blank, is_blank, open_file, FilePathParser, UrlPathParser, get_suffix, assert_state
@@ -42,8 +43,6 @@ _BOOLEAN_TYPE = bool
 _DICT_TYPE = dict
 _STR_TYPE = str
 _OPTION_STR = Optional[_STR_TYPE]
-
-LOOP = asyncio.get_event_loop()
 
 try:
     assert sys.version_info.major == 3
@@ -481,7 +480,7 @@ class SimpleDropboxAPIV2(SimpleAPI):
         return SimpleFileMetadata(metadata), bytes_array
 
     def async_download_from_dropbox(self,
-                                    remote_file_path: str) -> Tuple[SimpleFileMetadata, bytes]:
+                                    remote_file_path: str) -> Tuple[SimpleFileMetadata, Response]:
         """
         async download from dropbox
         :param remote_file_path:        remote file path in dropbox
@@ -496,6 +495,17 @@ class SimpleDropboxAPIV2(SimpleAPI):
 
         return self.loop.run_until_complete(_download_from_dropbox())
 
+    def download_as_response(self, remote_file_path: str) -> Response:
+        """
+        download as response
+        remote file path is not blank
+        :param remote_file_path:        remote file path in dropbox
+        :return:                        requests.Response
+        """
+        assert is_not_blank(remote_file_path)
+        _, response = self.async_download_from_dropbox(remote_file_path=remote_file_path)
+        return response
+
     def download_as_bytes(self, remote_file_path: str) -> bytes:
         """
         download as bytes
@@ -504,8 +514,7 @@ class SimpleDropboxAPIV2(SimpleAPI):
         :return:                        byte array
         """
         assert is_not_blank(remote_file_path)
-        _, file_bytes = self.async_download_from_dropbox(remote_file_path=remote_file_path)
-        return file_bytes
+        return self.download_as_response(remote_file_path=remote_file_path).content
 
     def download_as_file(self,
                          remote_file_path: str,
@@ -647,7 +656,8 @@ class SimpleWrapper(object):
     # ...
 
 
-from concurrent.futures import  ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
+
 upload_file_pool = ThreadPoolExecutor(100)
 
 
@@ -821,9 +831,11 @@ class SimpleDBXServiceAPI(SimpleDropboxAPIV2):
                           **kwargs).to_dict()
 
 
-# restful API
+# restful API Samples
 
 import flask
+
+LOOP = asyncio.get_event_loop()
 
 app = flask.Flask(__name__, template_folder="../templates")
 sda = SimpleDBXServiceAPI(access_token=ACCESS_TOKEN)
@@ -865,7 +877,7 @@ def upload_from_external_url():
     """
     eu = request.args.get("external_url") or request.args.get("eu")
     en = request.args.get("excepted_name") or request.args.get('en')
-    rfp = request.args.get("remote_file_path") or request.args.get('rfp')
+    rfp = request.args.get("remote_file_path") or request.args.get('rfp') or "/DEFAULT/"
 
     res = sda.simple_upload_from_url(external_url=eu, remote_file_path=rfp, excepted_name=en)
     return flask.jsonify(res)
@@ -970,14 +982,14 @@ def showtime():
                 file_suffix = real_name.split(".")[-1]
                 file_mime = get_mime(file_suffix)
 
-                md, res = sda.download_as_bytes(remote_file_path=item.get("path"))
+                content = sda.download_as_bytes(remote_file_path=item.get("path"))
 
                 # cache file via coroutine
                 local_cache_file = os.path.join(local_cache_path, real_name)
-                cache_with_coroutine(file_path=local_cache_file, w_data=res.content)
+                cache_with_coroutine(file_path=local_cache_file, w_data=content)
 
                 return flask.send_file(
-                    io.BytesIO(res.content),
+                    io.BytesIO(content),
                     attachment_filename=real_name,
                     mimetype=file_mime
                 )
