@@ -699,7 +699,8 @@ class DropboxWrapper(SimpleWrapper, SimpleDropboxAPIV2):
                 logger.debug("%s ==> %s " % (_local_file_path, _remote_file_path))
             # md = self.upload(local_file_path=_local_file_path, remote_file_path=_remote_file_path)
             # print(md)
-            future = upload_file_pool.submit(fn=self.upload, local_file_path=_local_file_path,
+            future = upload_file_pool.submit(fn=self.upload,
+                                             local_file_path=_local_file_path,
                                              remote_file_path=_remote_file_path)
 
         pass
@@ -755,7 +756,6 @@ def get_mime(file_suffix: str) -> Optional[str]:
         # ....
     }
     return mime_dict.get(file_suffix)
-
 
 
 class SimpleDBXServiceAPI(SimpleDropboxAPIV2):
