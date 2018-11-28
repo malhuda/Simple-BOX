@@ -21,7 +21,7 @@ from dropbox.files import FileMetadata, ListFolderResult
 from flask import flash, request, redirect, render_template
 from werkzeug.utils import secure_filename
 
-from py_fortify import is_not_blank, is_blank, open_file, FilePathParser, UrlPathParser, get_suffix
+from py_fortify import is_not_blank, is_blank, open_file, FilePathParser, UrlPathParser, get_suffix, assert_state
 from py_fortify.parser import BaseParser
 
 level = logging.DEBUG
@@ -647,6 +647,7 @@ class SimpleWrapper(object):
     # ...
 
 
+from concurrent.futures import  ThreadPoolExecutor
 upload_file_pool = ThreadPoolExecutor(100)
 
 
