@@ -16,6 +16,7 @@ dropbox = "*"
 gunicorn = "*"
 pytest = "*"
 responder = "*"
+pysocks = "*"
 
 
 [dev-packages]
