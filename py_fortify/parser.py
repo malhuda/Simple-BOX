@@ -25,30 +25,30 @@ FILE_DOT = "."
 # TODO
 
 class BaseParser(object):
-    __slots__ = ['full_path_file_string']
+    __slots__ = ['_full_path_file_string']
 
     def __init__(self, full_path_file_string: str) -> None:
-        self.full_path_file_string = full_path_file_string
+        self._full_path_file_string = full_path_file_string
 
-        if self.full_path_file_string is None:
+        if self._full_path_file_string is None:
             raise ValueError("full path file string is None!")
 
     @property
     def is_blank(self) -> bool:
-        return is_blank(self.full_path_file_string)
+        return is_blank(self._full_path_file_string)
 
     @property
     def is_not_blank(self) -> bool:
         return not self.is_blank
 
     @property
-    def raw_string(self) -> str:
-        return self.full_path_file_string
+    def full_path_file_string(self) -> str:
+        return self._full_path_file_string
 
-    @raw_string.setter
-    def set_raw_string(self, value) -> None:
+    @full_path_file_string.setter
+    def full_path_file_string(self, value) -> None:
         assert value is not None
-        self.full_path_file_string = value
+        self._full_path_file_string = value
 
         # .....
 
@@ -62,7 +62,7 @@ class FilePathParser(BaseParser):
 
     @property
     def is_exist(self) -> bool:
-        return os.path.exists(self.full_path_file_string)
+        return os.path.exists(self._full_path_file_string)
 
     @property
     def is_not_exist(self) -> bool:
@@ -70,15 +70,15 @@ class FilePathParser(BaseParser):
 
     @property
     def is_file(self) -> bool:
-        return os.path.isfile(self.full_path_file_string)
+        return os.path.isfile(self._full_path_file_string)
 
     @property
     def is_not_file(self) -> bool:
         return not self.is_file
 
     @property
-    def  is_dir(self) -> bool:
-        return os.path.isdir(self.full_path_file_string)
+    def is_dir(self) -> bool:
+        return os.path.isdir(self._full_path_file_string)
 
     @property
     def is_not_dir(self) -> bool:
@@ -86,25 +86,25 @@ class FilePathParser(BaseParser):
 
     @property
     def is_windows_file(self) -> bool:
-        if ntsep in self.raw_string:
+        if ntsep in self.full_path_file_string:
             return True
         else:
             return False
 
     @property
     def driver(self) -> Optional[str]:
-        return None if is_blank(os.path.splitdrive(self.full_path_file_string)[0]) else \
-            os.path.splitdrive(self.full_path_file_string)[0]
+        return None if is_blank(os.path.splitdrive(self._full_path_file_string)[0]) else \
+            os.path.splitdrive(self._full_path_file_string)[0]
 
     @property
     def dirname(self) -> Optional[str]:
-        return None if is_blank(os.path.dirname(self.full_path_file_string)) else os.path.dirname(
-            self.full_path_file_string)
+        return None if is_blank(os.path.dirname(self._full_path_file_string)) else os.path.dirname(
+            self._full_path_file_string)
 
     @property
     def basename(self) -> Optional[str]:
-        return None if is_blank(os.path.basename(self.full_path_file_string)) else os.path.basename(
-            self.full_path_file_string)
+        return None if is_blank(os.path.basename(self._full_path_file_string)) else os.path.basename(
+            self._full_path_file_string)
 
     @property
     def source_name(self) -> Optional[str]:
@@ -117,10 +117,10 @@ class FilePathParser(BaseParser):
     @property
     def source_path(self) -> Optional[str]:
         if self.is_dir:
-            return self.full_path_file_string
+            return self._full_path_file_string
         if self.source_name is None:
-            return self.full_path_file_string
-        return self.full_path_file_string.replace(self.source_name, "")
+            return self._full_path_file_string
+        return self._full_path_file_string.replace(self.source_name, "")
 
     @property
     def source_suffix(self) -> Optional[str]:
@@ -139,7 +139,7 @@ class FilePathParser(BaseParser):
         """
         Set source name which expected
         sample as
-        a = FilePathParser(full_path_file_string = '/foo/bar.jpg')
+        a = FilePathParser(_full_path_file_string = '/foo/bar.jpg')
         b = a.set_source_name(excepted_source_name='cat.jpg')
         # '/foo/cat.jpg'
         :param excepted_source_name:
@@ -149,17 +149,18 @@ class FilePathParser(BaseParser):
                             excepted_source_name) if self.source_path is not None else excepted_source_name
 
     def translate_to_linux_file(self):
-        if is_blank(self.raw_string):
-            return self.raw_string
+        if is_blank(self.full_path_file_string):
+            return self.full_path_file_string
 
         if not self.is_windows_file:
-            return self.raw_string
+            return self.full_path_file_string
 
         return os.path.join(posixsep, posixsep.join(
-            filter(lambda _item: is_not_blank(_item) and _item != self.driver, self.raw_string.split(ntsep))))
+            filter(lambda _item: is_not_blank(_item)
+                                 and _item != self.driver, self.full_path_file_string.split(ntsep))))
 
     def translate_to_linux_parser(self):
-        return FilePathParser(full_path_file_string=self.translate_to_linux_file())
+        return FilePathParser(_full_path_file_string=self.translate_to_linux_file())
 
     @classmethod
     def translate(cls, win_file: str):
@@ -171,7 +172,7 @@ class UrlPathParser(BaseParser):
     # TODO
     def __init__(self, **kwargs):
         super(UrlPathParser, self).__init__(**kwargs)
-        self._parsed = urlparse(self.full_path_file_string)
+        self._parsed = urlparse(self._full_path_file_string)
 
     @property
     def parsed(self) -> ParseResult:
@@ -179,8 +180,8 @@ class UrlPathParser(BaseParser):
 
     @property
     def is_http(self) -> bool:
-        return False if not self.full_path_file_string.startswith("http") and \
-                        not self.full_path_file_string.startswith("https") else True
+        return False if not self._full_path_file_string.startswith("http") and \
+                        not self._full_path_file_string.startswith("https") else True
 
     @property
     def is_not_http(self) -> bool:
@@ -191,7 +192,7 @@ class UrlPathParser(BaseParser):
         return self._parsed.scheme
 
     def fetch_source_from_url(self) -> Optional[str]:
-        last_sep = self.full_path_file_string.split("/")[-1]
+        last_sep = self._full_path_file_string.split("/")[-1]
         if last_sep.__contains__("?"):
             return re.findall(r'^(.+?)\?', last_sep)[0]
         elif last_sep.__contains__(":"):

@@ -155,6 +155,11 @@ class SimpleDropboxAPIV2(SimpleAPI):
         self.access_token = kwargs.get("access_token")
         self.dbxa = None
 
+    def upload_large_file_beta(self, file_path: str):
+        f = open(file=file_path)
+        file_size = os.path.getsize(filename=file_path)
+        CHUNK_SIZE = 4 * 1024 * 1024
+
     def dbx(self) -> None:
         # dropbox.create_session(proxies={
         #     'http': 'socks5://127.0.0.1:1081',

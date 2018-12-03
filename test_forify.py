@@ -8,15 +8,12 @@
  Time: 10/28/18
 """
 import logging
-import sys
 import os
-import ntpath
-import posixpath
 import unittest
-import requests
-from py_fortify import UrlPathParser, FilePathParser, equal_ignore, assert_state, PyForifyBaseException
-from py_fortify.constants import MIME_DICT
+
 from dropbox_api.dropbox_api import separate_path_and_name
+from py_fortify import UrlPathParser, FilePathParser, equal_ignore, assert_state
+from py_fortify.constants import MIME_DICT
 
 level = logging.DEBUG
 format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
