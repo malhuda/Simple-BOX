@@ -15,7 +15,7 @@ import logging
 import os
 import socket
 import sys
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Any, IO
 
 import dropbox
 import requests
@@ -121,7 +121,8 @@ class SimpleFileMetadata(object):
         return "file" if self.time != '' and self.__hash__() != '' else "folder"
 
     def __hash__(self):
-        return self.dropbox_file_metadata.content_hash if hasattr(self.dropbox_file_metadata, 'content_hash') else ""
+        return self.dropbox_file_metadata.content_hash if hasattr(self.dropbox_file_metadata, 'content_hash') \
+            else id(self.name)
 
     def to_dict(self):
         return {'id': self.id, 'name': self.name, 'path': self.path, 'time': self.time, 'type': self.type,
@@ -156,9 +157,33 @@ class SimpleDropboxAPIV2(SimpleAPI):
         self.dbxa = None
 
     def upload_large_file_beta(self, file_path: str):
-        f = open(file=file_path)
-        file_size = os.path.getsize(filename=file_path)
-        CHUNK_SIZE = 4 * 1024 * 1024
+        with open_file(file_name=file_path, mode="rb") as f:
+            file_size = os.path.getsize(filename=file_path)
+            CHUNK_SIZE = 10 * 1024 * 1024
+            if self.dbxa is None:
+                self.dbx()
+
+            if file_size <= CHUNK_SIZE:
+                return self.dbxa.files_upload(f, "/DEFAULT/11.mp3")
+            else:
+                upload_session_start_result = self.dbxa.files_upload_session_start(f.read(CHUNK_SIZE))
+                cursor = dropbox.files.UploadSessionCursor(session_id=upload_session_start_result.session_id,
+                                                           offset=f.tell())
+                commit = dropbox.files.CommitInfo(path="/DEFAULT/111.mp3")
+
+            while f.tell() < file_size:
+                if (file_size - f.tell()) < CHUNK_SIZE:
+                    return self.dbxa.files_upload_session_finish(
+                        f.read(CHUNK_SIZE),
+                        cursor,
+                        commit)
+                else:
+                    self.dbxa.files_upload_session_append(f.read(CHUNK_SIZE),
+                                                          cursor.session_id,
+                                                          cursor.offset)
+                    cursor.offset = f.tell()
+            if not f.closed:
+                f.close()
 
     def dbx(self) -> None:
         # dropbox.create_session(proxies={
@@ -197,13 +222,6 @@ class SimpleDropboxAPIV2(SimpleAPI):
         if self.dbxa is None:
             self.dbx()
 
-        # upload_session_start_result = self.dbxa.files_upload_session_start(file_bytes)
-        # cursor = dropbox.files.UploadSessionCursor(session_id=upload_session_start_result.session_id,
-        #                                            offset=len(file_bytes))
-        # commit = dropbox.files.CommitInfo(path=remote_file_path)
-        # return self.dbxa.files_upload_session_finish(file_bytes,
-        #                                 cursor,
-        #                                 commit)
         return self.dbxa.files_upload(file_bytes, remote_file_path, mode=dropbox.files.WriteMode.overwrite, mute=True)
 
     def async_upload_bytes(self,
@@ -223,6 +241,29 @@ class SimpleDropboxAPIV2(SimpleAPI):
             return await _inner_upload()
 
         return SimpleFileMetadata(self.loop.run_until_complete(_async_upload_bytes()))
+
+    def upload_with_large_file(self, local_file_path: str, remote_file_path: str, chunk_size: int):
+        chunk_size = chunk_size or 10 * 1024 * 1024
+        file_size = os.path.getsize(local_file_path)
+        if self.dbxa is None:
+            self.dbx()
+        with open_file(file_name=local_file_path, mode="rb") as file_read:
+            upload_session_start_result = self.dbxa.files_upload_session_start(file_read.read(chunk_size))
+            cursor = dropbox.files.UploadSessionCursor(session_id=upload_session_start_result.session_id,
+                                                       offset=file_read.tell())
+            commit = dropbox.files.CommitInfo(path=remote_file_path)
+
+            while file_read.tell() < file_size:
+                if (file_size - file_read.tell()) < chunk_size:
+                    return self.dbxa.files_upload_session_finish(
+                        file_read.read(chunk_size),
+                        cursor,
+                        commit)
+                else:
+                    self.dbxa.files_upload_session_append(file_read.read(chunk_size),
+                                                          cursor.session_id,
+                                                          cursor.offset)
+                    cursor.offset = file_read.tell()
 
     def upload_from_local(self,
                           local_file_path: str,
@@ -265,6 +306,7 @@ class SimpleDropboxAPIV2(SimpleAPI):
         :return:
         """
 
+        global metadata
         if is_blank(remote_file_path):
             if is_blank(remote_folder_path):
                 raise DropboxAPIException(
@@ -319,8 +361,19 @@ class SimpleDropboxAPIV2(SimpleAPI):
             # remote_file_path  /DEFAULT/A/bar
             # local_file_path   /foo/bar
             # auto set          /DEFAULT/A/bar
-        with open_file(file_name=local_file_path, mode="rb") as fr:
-            metadata = self.async_upload_bytes(file_bytes=fr.read(), remote_file_path=remote_file_path)
+
+        file_size = os.path.getsize(local_file_path)
+        chunk_size = 10 * 1024 * 1024
+        if file_size <= chunk_size:
+            if is_debug():
+                logger.debug("> uploading tiny file")
+            with open_file(file_name=local_file_path, mode="rb") as fr:
+                metadata = self.async_upload_bytes(file_bytes=fr.read(), remote_file_path=remote_file_path)
+        else:
+            if is_debug():
+                logger.debug("> uploading large file")
+                metadata = self.upload_with_large_file(local_file_path=local_file_path,
+                                                       remote_file_path=remote_file_path, chunk_size=chunk_size)
 
         if logger.level == logging.DEBUG:
             logger.debug("upload_from_local metadata is %s" % metadata)
