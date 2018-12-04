@@ -8,6 +8,9 @@
  Time: 10/27/18
  常用方法
 """
+__all__ = ['open_file', 'is_blank', 'is_not_blank', 'get_mime', 'get_suffix', 'assert_state', 'equal_ignore',
+           'AtomicInt']
+import threading
 from contextlib import contextmanager
 from typing import Optional
 
@@ -51,3 +54,42 @@ def equal_ignore(foo: str, bar: str) -> bool:
     if foo is None: return False
     if bar is None: return False
     return foo.strip().lower() == bar.strip().lower()
+
+
+class AtomicInt:
+    __slots__ = ['_current_thread', '_value', '_lock']
+
+    def __init__(self, value=0) -> None:
+        self._value = value
+        self._lock = threading.Lock()
+        self._current_thread = threading.current_thread()
+
+    @property
+    def get(self):
+        with self._lock:
+            return self._value
+
+    @get.setter
+    def set(self, value):
+        with self._lock:
+            self._value = value
+
+    def get_and_increment(self):
+        with self._lock:
+            self._value += 1
+
+    def get_and_decrement(self):
+        with self._lock:
+            self._value += -1
+
+
+def show_flag(i):
+    print(i)
+
+
+if __name__ == '__main__':
+    a = AtomicInt(value=10000)
+    while True:
+        a.get_and_decrement()
+        t = threading.Thread(target=show_flag, args=(a.get,))
+        t.start()
