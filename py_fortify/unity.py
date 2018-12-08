@@ -12,7 +12,7 @@ __all__ = ['open_file', 'is_blank', 'is_not_blank', 'get_mime', 'get_suffix', 'a
            'AtomicInt']
 import threading
 from contextlib import contextmanager
-from typing import Optional
+from typing import Optional, Union
 
 from py_fortify.constants import MIME_DICT
 
@@ -25,12 +25,20 @@ def open_file(file_name: str, mode: str = 'wb'):
     file.close()
 
 
-def is_blank(pstr: str) -> bool:
-    return True if pstr is None or pstr.strip('') == '' else False
+def is_blank(value: Optional[Union[int, str, dict, list]]) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return True if value is None or value.strip('') == '' else False
+    if isinstance(value, dict):
+        return True if len(value) > 0 else False
+    if isinstance(value, list):
+        return True if len(value) > 0 else False
+    return False
 
 
-def is_not_blank(pstr: str) -> bool:
-    return not is_blank(pstr=pstr)
+def is_not_blank(value: Optional[Union[int, str, dict, list]]) -> bool:
+    return not is_blank(value=value)
 
 
 def get_mime(suffix: str) -> Optional[str]:
@@ -56,31 +64,33 @@ def equal_ignore(foo: str, bar: str) -> bool:
     return foo.strip().lower() == bar.strip().lower()
 
 
-class AtomicInt:
+class AtomicInt(object):
     __slots__ = ['_current_thread', '_value', '_lock']
 
-    def __init__(self, value=0) -> None:
+    def __init__(self, value: int = 0) -> None:
         self._value = value
         self._lock = threading.Lock()
         self._current_thread = threading.current_thread()
 
     @property
-    def get(self):
+    def get(self) -> int:
         with self._lock:
             return self._value
 
     @get.setter
-    def set(self, value):
+    def set(self, value: int) -> None:
         with self._lock:
             self._value = value
 
-    def get_and_increment(self):
+    def get_and_increment(self) -> int:
         with self._lock:
             self._value += 1
+            return self._value
 
-    def get_and_decrement(self):
+    def get_and_decrement(self) -> int:
         with self._lock:
             self._value += -1
+            return self._value
 
 
 def show_flag(i):

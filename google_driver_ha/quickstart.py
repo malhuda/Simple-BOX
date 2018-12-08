@@ -60,9 +60,9 @@ def main():
 socks.set_default_proxy(proxy_type=socks.SOCKS5, addr="127.0.0.1", port=1081, rdns="1.1.1.1")
 socket.socket = socks.socksocket
 if __name__ == '__main__':
-    # main()
-    from google_driver_ha.gigu import Gigu
-
-    gigu = Gigu(credential_file_path="credentials.json")
-    gigu.simple_upload(file_path=r"C:\Users\wb-zj268791\Desktop\alibaba\通用\粘贴图片(2).png",
-                       excepted_name="粘贴图片(2).png")
+    main()
+    # from google_driver_ha.gigu import Gigu
+    #
+    # gigu = Gigu(credential_file_path="credentials.json")
+    # gigu.simple_upload(file_path=r"C:\Users\wb-zj268791\Desktop\alibaba\通用\粘贴图片(2).png",
+    #                    excepted_name="粘贴图片(2).png")

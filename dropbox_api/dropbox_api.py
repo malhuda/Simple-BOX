@@ -868,7 +868,7 @@ class SimpleDBXServiceAPI(SimpleDropboxAPIV2):
         :return:
         """
 
-        assert_state(is_blank(pstr=remote_folder_path),
+        assert_state(is_blank(remote_folder_path),
                      "SimpleDBXServiceAPI#simple_list , remote_folder_path is blank !")
         return [SimpleFileMetadata(sfm).to_dict() for sfm in self.list(remote_folder_path=remote_folder_path).entries]
 
