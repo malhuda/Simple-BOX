@@ -12,7 +12,7 @@ import os
 import unittest
 
 from dropbox_api.dropbox_api import separate_path_and_name
-from py_fortify import UrlPathParser, FilePathParser, equal_ignore, assert_state
+from py_fortify import UrlPathParser, FilePathParser, equal_ignore, assert_state, generate_random_string_with_digest
 from py_fortify.constants import MIME_DICT
 
 level = logging.DEBUG
@@ -79,6 +79,19 @@ class TestParser(unittest.TestCase):
         except Exception as ex:
             print(ex)
         pass
+
+    def test_random_string(self):
+        rds = generate_random_string_with_digest()
+        print("==> rds = " + rds)
+
+        rds = generate_random_string_with_digest()
+        print("==> rds = " + rds)
+
+        rds = generate_random_string_with_digest()
+        print("==> rds = " + rds)
+
+        rds = generate_random_string_with_digest()
+        print("==> rds = " + rds)
 
 
 if __name__ == '__main__':

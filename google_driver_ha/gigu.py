@@ -84,6 +84,30 @@ class Gigu(BaseAction):
         service = build('drive', 'v3', http=credential.authorize(Http()))
         self.driver_service = service
 
+    # ===============>
+
+    def list_invoke(self, **params):
+        if self.driver_service is None:
+            self.get_service()
+
+        results = self.driver_service.files().list(**params).execute()
+        items = results.get("files", [])
+        return items
+
+    def upload_invoke(self, **params):
+        if self.driver_service is None:
+            self.get_service()
+
+        file_metadata = {'name': 'photo.jpg', 'parents': ['1Ewk0E5wmCTLxhqO3DX4V-8I7Q1HVMDZY']}
+        media = MediaFileUpload('files/photo.jpg',
+                                mimetype='image/jpeg')
+
+        file = self.driver_service.files().create(body=file_metadata,
+                                                  media_body=media,
+                                                  fields='id').execute()
+
+    # <================
+
     def create_folder(self, metadata: JSON_TYPE) -> JSON_TYPE:
         """ create folder
         """
@@ -105,7 +129,8 @@ class Gigu(BaseAction):
     def simple_create_folder(self, folder_name) -> JSON_TYPE:
         folder_metadata = {
             'name': folder_name,
-            'mimeType': 'application/vnd.google-apps.folder'
+            'mimeType': 'application/vnd.google-apps.folder',
+            'folderColorRgb': '#FF0000'
         }
         return self.create_folder(metadata=folder_metadata)
 
@@ -168,7 +193,10 @@ class Gigu(BaseAction):
             logger.debug("file list params is :%s , result is :%s" % (params, result))
         return result
 
-    def simple_upload(self, file_path: str, excepted_name: str = None, excepted_suffix: str = None) -> JSON_TYPE:
+    def simple_upload(self,
+                      file_path: str,
+                      excepted_name: str = None,
+                      excepted_suffix: str = None) -> JSON_TYPE:
         """simple upload"""
         if self.driver_service is None:
             self.get_service()
@@ -188,11 +216,12 @@ class Gigu(BaseAction):
             else:
                 excepted_suffix = excepted_name.split(FILE_DOT)[-1]
 
-        upload_file_metadata = {'name': excepted_name}
+        upload_file_metadata = {'name': excepted_name, "description": "測試",
+                                "parents": ["1Ewk0E5wmCTLxhqO3DX4V-8I7Q1HVMDZY"]}
         upload_media = MediaFileUpload(filename=file_path, mimetype=transform_mime(excepted_suffix))
         file_created = self.driver_service.files().create(body=upload_file_metadata,
                                                           media_body=upload_media,
-                                                          fields="id").execute()
+                                                          fields="id,name").execute()
         # file_created['file_path'] = file_path
         if logger.level == logging.DEBUG:
             logger.debug("file created is %s", file_created)
@@ -248,11 +277,10 @@ def list_file_demo():
     gigu = Gigu(credential_file_path="/Users/helix/Dev/PycharmProjects/pyenv_dev/resources/credentials.json")
     gigu.list(params={'pageToken': None, 'orderBy': 'folder', 'pageSize': 10}, max_size=10)
 
+
 def get_file_demo():
     gigu = Gigu(credential_file_path="/Users/helix/Dev/PycharmProjects/pyenv_dev/resources/credentials.json")
     gigu.get(file_id='1YsfW7UBliUWLUKk4eKsh6OIMZgjJtBZN')
-
-
 
 
 if __name__ == '__main__':

@@ -96,6 +96,6 @@ class Downloader(object):
 
 if __name__ == '__main__':
     d = Downloader(url='http://file.allitebooks.com/20160611/Kali%20Linux%20Web%20Penetration%20Testing%20Cookbook.pdf',
-                   thread_count=1,
+                   thread_count=5,
                    local_file_path=r"D:\open_code\Simple-BOX\Simple-BOX\da.pdf")
     d.run()

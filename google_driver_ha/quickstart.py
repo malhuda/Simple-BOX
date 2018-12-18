@@ -45,8 +45,9 @@ def main():
         creds = tools.run_flow(flow=flow, storage=store)
 
     service = build('drive', 'v3', http=creds.authorize(Http()))
+    # https://developers.google.com/drive/api/v3/reference/files
     results = service.files().list(
-        pageSize=10, fields="nextPageToken, files(id, name)").execute()
+        pageSize=10, fields="nextPageToken, files(id, name,mimeType,md5Checksum,size)").execute()
     items = results.get('files', [])
 
     if not items:
@@ -54,15 +55,21 @@ def main():
     else:
         print('Files:')
         for item in items:
-            print(u'{0} ({1})'.format(item['name'], item['id']))
+            print(u'name={0} (id={1} , mime={2})'.format(item['name'], item['id'], item['mimeType']))
 
 
-socks.set_default_proxy(proxy_type=socks.SOCKS5, addr="127.0.0.1", port=1081, rdns="1.1.1.1")
-socket.socket = socks.socksocket
+# socks.set_default_proxy(proxy_type=socks.SOCKS5, addr="127.0.0.1", port=1081, rdns="1.1.1.1")
+# socket.socket = socks.socksocket
 if __name__ == '__main__':
-    main()
-    # from google_driver_ha.gigu import Gigu
-    #
-    # gigu = Gigu(credential_file_path="credentials.json")
-    # gigu.simple_upload(file_path=r"C:\Users\wb-zj268791\Desktop\alibaba\通用\粘贴图片(2).png",
-    #                    excepted_name="粘贴图片(2).png")
+    # main()
+    from google_driver_ha.gigu import Gigu
+
+    gigu = Gigu(credential_file_path="credentials.json")
+
+    # https://developers.google.com/drive/api/v3/search-parameters
+    items = gigu.list_invoke(q="name contains '纲'", pageSize=200,
+                             fields="nextPageToken, files(id, name,mimeType,md5Checksum,size)")
+    print(items)
+    # print(gigu.simple_create_folder(folder_name="纲"))
+    print(gigu.simple_upload(file_path=r"C:\Users\wb-zj268791\Desktop\1_3_banner_dark.png",
+                             excepted_name="1_3_banner_dark.png"))
