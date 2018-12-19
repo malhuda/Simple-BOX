@@ -14,7 +14,9 @@ import logging
 import socket
 import sys
 
+import requests
 import socks
+from googleapiclient.http import MediaFileUpload, MediaInMemoryUpload
 
 level = logging.DEBUG
 format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -62,14 +64,58 @@ def main():
 # socket.socket = socks.socksocket
 if __name__ == '__main__':
     # main()
-    from google_driver_ha.gigu import Gigu
+    from google_driver_ha.gigu import Gigu, transform_mime
 
     gigu = Gigu(credential_file_path="credentials.json")
+    drive_service = gigu.get_service()
 
     # https://developers.google.com/drive/api/v3/search-parameters
-    items = gigu.list_invoke(q="name contains '纲'", pageSize=200,
-                             fields="nextPageToken, files(id, name,mimeType,md5Checksum,size)")
-    print(items)
-    # print(gigu.simple_create_folder(folder_name="纲"))
-    print(gigu.simple_upload(file_path=r"C:\Users\wb-zj268791\Desktop\1_3_banner_dark.png",
-                             excepted_name="1_3_banner_dark.png"))
+    results = drive_service.files().list(
+        q="mimeType='application/vnd.google-apps.folder' and name contains 'XXX'",
+        pageSize=200,
+        pageToken=None,
+        fields="nextPageToken, files(id, name,mimeType,md5Checksum,size)").execute()
+
+    items = results.get("files", [])
+    print("==> get remote google drive folder is %s" % items)
+
+    folder_id = None
+
+    if items is None or len(items) < 1:
+        # create remote google drive folder
+        # https://developers.google.com/drive/api/v3/manage-uploads
+
+        folder_created_metadata = {'name': 'XXX',
+                                   'mimeType': 'application/vnd.google-apps.folder',
+                                   'description': "Alibaba 上传分类",
+                                   'folderColorRgb': '#FF0000'}
+
+        folder_created = drive_service.files() \
+            .create(body=folder_created_metadata,
+                    fields="id, name, mimeType,description,md5Checksum,size").execute()
+        print("==> created new folder  metadata is %s" % folder_created)
+        folder_id = folder_created.get("id")
+    else:
+        folder_id = items[0].get("id")
+
+    print("folder_id is = %s" % folder_id)
+
+    #  upload file from local path
+    file_upload_metadata = {"name": "name.png", "description": "测试",
+                            "parents": [folder_id]}
+    # media_upload = MediaFileUpload(filename=r"C:\Users\wb-zj268791\Desktop\1_3_banner_dark.png",
+    #                                     mimetype=transform_mime("png"),
+    #                                     resumable=True)
+
+    res = requests.get(url="http://www.maactioncinema.com/wp-content/uploads/2018/06/35541654_1845172008836344_2668721012186546176_n.jpg")
+    media_upload = MediaInMemoryUpload(body=res.content,
+                                       # mimetype=transform_mime("png"),
+                                       chunksize=100 * 1024 * 1024,
+                                       resumable=True)
+
+    file_upload = drive_service.files() \
+        .create(body=file_upload_metadata,
+                media_body=media_upload,
+                fields="id, name, mimeType,description,md5Checksum,size", ).execute()
+
+    print("==> file upload is %s" % file_upload)

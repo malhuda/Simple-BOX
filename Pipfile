@@ -1,12 +1,9 @@
 [[source]]
-
 url = "https://pypi.org/simple"
 verify_ssl = true
 name = "pypi"
 
-
 [packages]
-
 requests = {extras = ["socks"]}
 flask = "*"
 google-api-python-client = "*"
@@ -17,17 +14,12 @@ gunicorn = "*"
 pytest = "*"
 responder = "*"
 pysocks = "*"
-
+weibo-scraper = "==1.0.7b0"
 
 [dev-packages]
 
-
-
 [requires]
-
 python_version = "3.6"
 
-
 [pipenv]
-
 allow_prereleases = true

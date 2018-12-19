@@ -12,9 +12,10 @@ from __future__ import print_function
 import io
 import logging
 import os
+import inspect
 
 from googleapiclient.discovery import build, Resource
-from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
+from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload, MediaUpload
 from httplib2 import Http
 from oauth2client import file, client, tools
 
@@ -67,60 +68,88 @@ class Gigu(BaseAction):
     def __init__(self, credential_file_path):
         super().__init__()
         self.credential_file_path = credential_file_path
-        self.driver_service = None
+        self._drive_service = None
 
-    def get_service(self, ) -> None:
-        """ get driver service
-            file structure is #reference :https://developers.google.com/drive/api/v3/reference/files
+    @property
+    def drive_service(self):
+        return self._drive_service
+
+    @drive_service.setter
+    def drive_service(self, value: Resource):
+        self._drive_service = value
+
+    def get_service(self, ) -> Resource:
+        """ get drive service
+            #reference :https://developers.google.com/drive/api/v3/reference/files
         """
-        store = file.Storage('token.json')
-        credential = store.get()
-        if not credential or credential.invalid:
-            if self.credential_file_path is None or not os.path.exists(self.credential_file_path):
-                raise GiguException("credential path is not exist!")
+        if self.drive_service is None:
+            store = file.Storage('token.json')
+            credential = store.get()
+            if not credential or credential.invalid:
+                if self.credential_file_path is None or not os.path.exists(self.credential_file_path):
+                    raise GiguException("credential path is not exist!")
 
-            flow = client.flow_from_clientsecrets(self.credential_file_path, AUTH_SCOPES)
-            credential = tools.run_flow(flow, store)
-        service = build('drive', 'v3', http=credential.authorize(Http()))
-        self.driver_service = service
+                flow = client.flow_from_clientsecrets(self.credential_file_path, AUTH_SCOPES)
+                credential = tools.run_flow(flow, store)
+
+            service = build('drive', 'v3', http=credential.authorize(Http()))
+            self.drive_service = service
+
+        return self.drive_service
 
     # ===============>
 
     def list_invoke(self, **params):
-        if self.driver_service is None:
+        if self.drive_service is None:
             self.get_service()
 
-        results = self.driver_service.files().list(**params).execute()
+        results = self.drive_service.files().list(**params).execute()
         items = results.get("files", [])
         return items
 
-    def upload_invoke(self, **params):
-        if self.driver_service is None:
+    def upload_invoke(self, media_upload: MediaUpload, ):
+        """
+
+        MediaInMemoryUpload
+
+        Args:
+
+        body: string, Bytes of body content.
+        mimetype: string, Mime-type of the file or default of
+          'application/octet-stream'.
+        chunksize: int, File will be uploaded in chunks of this many bytes. Only
+          used if resumable=True.
+        resumable: bool, True if this is a resumable upload. False means upload
+          in a single request.
+        :param media_upload:
+        :return:
+        """
+        if self.drive_service is None:
             self.get_service()
 
         file_metadata = {'name': 'photo.jpg', 'parents': ['1Ewk0E5wmCTLxhqO3DX4V-8I7Q1HVMDZY']}
-        media = MediaFileUpload('files/photo.jpg',
-                                mimetype='image/jpeg')
+        media = MediaFileUpload('files/photo.jpg', mimetype='image/jpeg')
 
-        file = self.driver_service.files().create(body=file_metadata,
-                                                  media_body=media,
-                                                  fields='id').execute()
+        file = self.drive_service.files().create(body=file_metadata,
+                                                 media_body=media,
+                                                 media_mime_type="",
+                                                 fields='id,name').execute()
 
     # <================
 
     def create_folder(self, metadata: JSON_TYPE) -> JSON_TYPE:
         """ create folder
         """
-        if self.driver_service is None:
+        if self.drive_service is None:
             self.get_service()
             # check again
-        if self.driver_service is None:
+        if self.drive_service is None:
             raise GiguException("driver service is None!")
         if metadata is None:
             raise GiguException("metadata is None!")
 
-        folder_created = self.driver_service.files().create(body=metadata,
-                                                            fields='id').execute()
+        folder_created = self.drive_service.files().create(body=metadata,
+                                                           fields='id').execute()
         folder_created['metadata'] = metadata
         if logger.level == logging.DEBUG:
             logger.debug("folder created  is %s", folder_created)
@@ -137,14 +166,14 @@ class Gigu(BaseAction):
     def delete(self, file_id: str):
         """ delete file by file id"""
         file_deleted = {}
-        if self.driver_service is None:
+        if self.drive_service is None:
             self.get_service()
             # check again
-        if self.driver_service is None:
+        if self.drive_service is None:
             raise GiguException("driver service is None!")
         try:
             file_deleted['file_id'] = file_id
-            self.driver_service.files().delete(fileId=file_id).execute()
+            self.drive_service.files().delete(fileId=file_id).execute()
             file_deleted['success'] = True
         except Exception as ex:
             logger.error("delete file by file id:%s occurred an exception : %s", (file_id, ex))
@@ -157,30 +186,30 @@ class Gigu(BaseAction):
 
     def get(self, file_id: str) -> JSON_TYPE:
         """get by file id"""
-        if self.driver_service is None:
+        if self.drive_service is None:
             self.get_service()
             # check again
-        if self.driver_service is None:
+        if self.drive_service is None:
             raise GiguException("driver service is None!")
 
-        file_get = self.driver_service.files().get_media(fileId=file_id).execute()
+        file_get = self.drive_service.files().get_media(fileId=file_id).execute()
         if logger.level == logging.DEBUG:
             logger.debug("file get is %s" % file_get)
         return file_get
 
     def list(self, params: JSON_TYPE, max_size: int) -> LIST_TYPE:
         """ list file items """
-        if self.driver_service is None:
+        if self.drive_service is None:
             self.get_service()
             # check again
-        if self.driver_service is None:
+        if self.drive_service is None:
             raise GiguException("driver service is None!")
         result = []
         tmp_size = 0
         while True:
             if tmp_size > max_size:
                 break
-            files = self.driver_service.files().list(**params).execute()
+            files = self.drive_service.files().list(**params).execute()
             result.extend(files['items'])
             page_token = files.get('nextPageToken')
 
@@ -198,10 +227,10 @@ class Gigu(BaseAction):
                       excepted_name: str = None,
                       excepted_suffix: str = None) -> JSON_TYPE:
         """simple upload"""
-        if self.driver_service is None:
+        if self.drive_service is None:
             self.get_service()
             # check again
-        if self.driver_service is None:
+        if self.drive_service is None:
             raise GiguException("driver service is None!")
 
         if not os.path.exists(file_path):
@@ -219,21 +248,21 @@ class Gigu(BaseAction):
         upload_file_metadata = {'name': excepted_name, "description": "測試",
                                 "parents": ["1Ewk0E5wmCTLxhqO3DX4V-8I7Q1HVMDZY"]}
         upload_media = MediaFileUpload(filename=file_path, mimetype=transform_mime(excepted_suffix))
-        file_created = self.driver_service.files().create(body=upload_file_metadata,
-                                                          media_body=upload_media,
-                                                          fields="id,name").execute()
+        file_created = self.drive_service.files().create(body=upload_file_metadata,
+                                                         media_body=upload_media,
+                                                         fields="id,name").execute(num_retries=2)
         # file_created['file_path'] = file_path
         if logger.level == logging.DEBUG:
             logger.debug("file created is %s", file_created)
         return file_created
 
     def download_file(self, file_id: str, mime_type: str):
-        if self.driver_service is None:
+        if self.drive_service is None:
             self.get_service()
             # check again
-        if self.driver_service is None:
+        if self.drive_service is None:
             raise GiguException("driver service is None!")
-        request = self.driver_service.files().get_media(fileId=file_id, )
+        request = self.drive_service.files().get_media(fileId=file_id, )
         fh = io.BytesIO()
         downloader = MediaIoBaseDownload(fh, request)
         done = False
