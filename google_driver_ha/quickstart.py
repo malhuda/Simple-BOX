@@ -60,8 +60,8 @@ def main():
             print(u'name={0} (id={1} , mime={2})'.format(item['name'], item['id'], item['mimeType']))
 
 
-# socks.set_default_proxy(proxy_type=socks.SOCKS5, addr="127.0.0.1", port=1081, rdns="1.1.1.1")
-# socket.socket = socks.socksocket
+socks.set_default_proxy(proxy_type=socks.SOCKS5, addr="127.0.0.1", port=1081, rdns="1.1.1.1")
+socket.socket = socks.socksocket
 if __name__ == '__main__':
     # main()
     from google_driver_ha.gigu import Gigu, transform_mime
@@ -83,7 +83,7 @@ if __name__ == '__main__':
 
     if items is None or len(items) < 1:
         # create remote google drive folder
-        # https://developers.google.com/drive/api/v3/manage-uploads
+        # ge-uploads
 
         folder_created_metadata = {'name': 'XXX',
                                    'mimeType': 'application/vnd.google-apps.folder',
@@ -101,13 +101,13 @@ if __name__ == '__main__':
     print("folder_id is = %s" % folder_id)
 
     #  upload file from local path
-    file_upload_metadata = {"name": "name.png", "description": "测试",
+    file_upload_metadata = {"name": "TCPIP%20Illustrated,%20Volume%201,%202nd%20Edition.pdf", "description": "",
                             "parents": [folder_id]}
     # media_upload = MediaFileUpload(filename=r"C:\Users\wb-zj268791\Desktop\1_3_banner_dark.png",
     #                                     mimetype=transform_mime("png"),
     #                                     resumable=True)
 
-    res = requests.get(url="http://www.maactioncinema.com/wp-content/uploads/2018/06/35541654_1845172008836344_2668721012186546176_n.jpg")
+    res = requests.get(url="http://file.allitebooks.com/20150523/TCPIP%20Illustrated,%20Volume%201,%202nd%20Edition.pdf")
     media_upload = MediaInMemoryUpload(body=res.content,
                                        # mimetype=transform_mime("png"),
                                        chunksize=100 * 1024 * 1024,

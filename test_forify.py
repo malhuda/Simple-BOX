@@ -93,6 +93,10 @@ class TestParser(unittest.TestCase):
         rds = generate_random_string_with_digest()
         print("==> rds = " + rds)
 
+    def test_files_generator(self):
+        for i in FilePathParser.files_generator(file_path="D:\迅雷下载"):
+            print(i)
+
 
 if __name__ == '__main__':
     unittest.main()

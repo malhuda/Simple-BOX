@@ -135,6 +135,12 @@ class FilePathParser(BaseParser):
     def source_path_and_name(self) -> Tuple[Optional[str], Optional[str]]:
         return self.source_path, self.source_name
 
+    @property
+    def size(self) -> Optional[int]:
+        if self.is_exist and self.is_file:
+            return os.path.getsize(self.full_path_file_string)
+        return None
+
     def set_source_name(self, excepted_source_name) -> str:
         """
         Set source name which expected
@@ -163,9 +169,23 @@ class FilePathParser(BaseParser):
         return FilePathParser(_full_path_file_string=self.translate_to_linux_file())
 
     @classmethod
-    def translate(cls, win_file: str):
-        pass
-    # ....
+    def files_generator(cls, file_path: str):
+        if os.path.exists(file_path):
+            if os.path.isdir(file_path):
+                global roots, dirs
+                for roots, dirs, files in os.walk(top=file_path):
+                    for _file in files:
+                        local_file_path = os.path.join(roots, _file)
+                        yield local_file_path
+
+                    if len(dirs) > 0:
+                        for _dir in dirs:
+                            local_folder_path = os.path.join(roots, _dir)
+                            cls.files_generator(file_path=local_folder_path)
+            else:
+                yield file_path
+        else:
+            yield None
 
 
 class UrlPathParser(BaseParser):
