@@ -156,24 +156,19 @@ async def running_and_upload(local_file_path: str):
         await upload_to_drive_from_local(local_file_path=local_file_path, folder_id=folder_id)
 
 
-s = sched.scheduler(time.time, time.sleep)
-
-
-def run_sched(action, *args):
-    s.enter(delay=5, priority=0, action=action, argument=args)
-    s.run()
-
+def cli():
+    args = sys.argv
+    local_folder_path = args[1]
 
 if __name__ == '__main__':
     wb_name = "嘻红豆"
-    remote_folder_name = "xxx"
     local_folder_path = "d:\\xixi"
+
+    remote_folder_name = "xxx"
 
     folder_metadata_future = LOOP.run_until_complete(exist_or_create(folder_name=remote_folder_name))
     print("folder_metadata is = %s" % folder_metadata_future)
 
     folder_id = folder_metadata_future.get("id")
 
-    # fetch wb
-    while True:
-        run_sched(async_fetch_wb, wb_name, local_folder_path)
+    os
