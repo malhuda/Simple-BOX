@@ -9,3 +9,4 @@
 """
 from .gigu import *
 from .gigu_service import *
+from .g_fly import  *

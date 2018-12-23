@@ -8,7 +8,7 @@
  Time: 10/4/18
 """
 import logging
-from google_driver_ha.gigu import *
+from google_drive_api.gigu import *
 
 level = logging.DEBUG
 format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'

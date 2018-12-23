@@ -64,7 +64,7 @@ socks.set_default_proxy(proxy_type=socks.SOCKS5, addr="127.0.0.1", port=1081, rd
 socket.socket = socks.socksocket
 if __name__ == '__main__':
     # main()
-    from google_driver_ha.gigu import Gigu, transform_mime
+    from google_drive_api.gigu import Gigu, transform_mime
 
     gigu = Gigu(credential_file_path="credentials.json")
     drive_service = gigu.get_service()

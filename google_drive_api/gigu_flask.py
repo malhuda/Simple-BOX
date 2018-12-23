@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(level)
 
 from flask import Flask, Request, jsonify
-from google_driver_ha.gigu_service import _res_tag, create_share_drive_folder, delete_share_drive_folder, get_file_detail
+from google_drive_api.gigu_service import _res_tag, create_share_drive_folder, delete_share_drive_folder, get_file_detail
 
 app = Flask(__name__)
 

@@ -10,20 +10,17 @@
  
  Add New Functional lite_fly
 """
+import asyncio
 import logging
+import os
+import queue
 import socket
 import sys
-import queue
-import asyncio
-
-import os
-import threading
-import requests
 import socks
-import sched, time
-from googleapiclient.http import MediaInMemoryUpload, MediaFileUpload
-from google_driver_ha import transform_mime
-from py_fortify import FilePathParser
+import argparse
+import threading
+from concurrent.futures.thread import ThreadPoolExecutor
+from googleapiclient.http import MediaFileUpload
 
 level = logging.DEBUG
 format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -36,18 +33,17 @@ PY3 = False
 
 SYNC_QUEUE = queue.Queue()
 LOOP = asyncio.get_event_loop()
+THREAD_POOL = ThreadPoolExecutor(10)
+CURRENT_DIR = os.getcwd()
 
 if sys.version > '3':
     PY3 = True
-
-socks.set_default_proxy(proxy_type=socks.SOCKS5, addr="127.0.0.1", port=1081, rdns="1.1.1.1")
-socket.socket = socks.socksocket
 
 from googleapiclient.discovery import build
 from httplib2 import Http
 from oauth2client import file, client, tools
 
-SCOPES = 'https://www.googleapis.com/auth/drive.metadata.readonly'
+SCOPES = 'https://www.googleapis.com/auth/drive'
 
 store = file.Storage("token.json")
 creds = store.get()
@@ -93,40 +89,18 @@ async def exist_or_create(folder_name: str) -> dict:
         return items[0]
 
 
-from samples import tweets_persistence
-
 _lock = threading.Lock()
 
 
-def async_fetch_wb(name: str, export_file_path: str) -> None:
-    if not os.path.exists(export_file_path):
-        os.makedirs(export_file_path)
-
-    async def _inner_fetch():
-        tweets_persistence.dispatch(name=name,
-                                    pages=None,
-                                    is_simplify=True,
-                                    persistence_format="txt",
-                                    export_file_path=export_file_path,
-                                    export_file_name=None,
-                                    is_debug=False)
-
-    LOOP.run_until_complete(_inner_fetch())
-    # for f in FilePathParser.files_generator(file_path=export_file_path):
-    #     with _lock:
-    #         SYNC_QUEUE.put(f)
-    #
-
-
 async def upload_to_drive_from_local(local_file_path: str, folder_id: str) -> dict:
-    lfpp = FilePathParser(full_path_file_string=local_file_path)
+    name = os.path.basename(local_file_path)
     #  upload file from local path
-    file_upload_metadata = {"name": lfpp.source_name,
+    file_upload_metadata = {"name": name,
                             "description": "",
                             "parents": [folder_id]}
 
-    media_upload = MediaFileUpload(filename=lfpp.full_path_file_string,
-                                   mimetype=transform_mime(lfpp.source_suffix),
+    media_upload = MediaFileUpload(filename=local_file_path,
+                                   # mimetype=transform_mime(lfpp.source_suffix),
                                    resumable=True)
 
     file_upload = drive_service.files() \
@@ -150,25 +124,65 @@ async def upload_to_drive_from_local(local_file_path: str, folder_id: str) -> di
     return file_upload
 
 
-async def running_and_upload(local_file_path: str):
-    with _lock:
-        local_file_path = SYNC_QUEUE.get()
-        await upload_to_drive_from_local(local_file_path=local_file_path, folder_id=folder_id)
-
-
 def cli():
     args = sys.argv
+    print("==> " + str(args))
+    if len(args) < 2:
+        raise Exception("illegal fucking args~")
     local_folder_path = args[1]
+    remote_folder_name = args[2] or "new Folder"
 
-if __name__ == '__main__':
-    wb_name = "嘻红豆"
-    local_folder_path = "d:\\xixi"
+    socket_proxy = args[3]
 
-    remote_folder_name = "xxx"
+    if local_folder_path is None:
+        raise Exception("local file path is not none~")
 
-    folder_metadata_future = LOOP.run_until_complete(exist_or_create(folder_name=remote_folder_name))
+    sure = input("do you want to sure sync {0} ==> {1}  to google drive?".format(local_folder_path, remote_folder_name))
+    if str(sure).upper() != 'Y':
+        return
+
+    if socket_proxy:
+        socket_host = socket_proxy.split(":")[0]
+        socket_port = socket_proxy.split(":")[1]
+        if not socket_port:
+            raise Exception("proxy port is not exist~")
+        socks.set_default_proxy(proxy_type=socks.SOCKS5, addr=socket_host, port=socket_port, rdns="1.1.1.1")
+        socket.socket = socks.socksocket
+
+    folder_metadata_future = LOOP.run_until_complete(exist_or_create(folder_name="xxx"))
     print("folder_metadata is = %s" % folder_metadata_future)
 
     folder_id = folder_metadata_future.get("id")
 
-    os
+    def scan_local_file_path(folder: str):
+        global roots, dirs
+        for roots, dirs, files in os.walk(top=folder):
+            for _file in files:
+                local_file_path = os.path.join(roots, _file)
+                yield local_file_path
+        if len(dirs) > 0:
+            for _dir in dirs:
+                local_folder_path = os.path.join(roots, _dir)
+                scan_local_file_path(folder=local_folder_path)
+
+    def async_upload(local_file_path: str, remote_folder_id: str) -> dict:
+        return LOOP.run_until_complete(
+            upload_to_drive_from_local(local_file_path=local_file_path, folder_id=remote_folder_id))
+
+    for fds in scan_local_file_path(folder=local_folder_path):
+        gu_future = THREAD_POOL.submit(async_upload, fds, folder_id, )
+        gu_result = gu_future.result()
+        print("{0} ==> {1}".format(fds, gu_result))
+        if gu_result.get("id"):
+            os.remove(fds)
+
+
+def g_test():
+    folder_id = LOOP.run_until_complete(exist_or_create(folder_name="dafa")).get("id")
+    LOOP.run_until_complete(upload_to_drive_from_local(local_file_path=r"D:\xixi\测试.txt", folder_id=folder_id))
+
+
+if __name__ == '__main__':
+    # cli()
+    # pass
+    g_test()
